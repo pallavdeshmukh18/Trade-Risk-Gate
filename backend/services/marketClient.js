@@ -1,35 +1,23 @@
 import axios from "axios";
+import { configDotenv } from "dotenv";
+configDotenv();
 
-const MARKET_SERVICE_URL = "http://market-data-service/live";
+let API_KEY = process.env.STOCK_API || "demo";
 
-export async function fetchMarketData(symbol) {
+const MARKET_SERVICE_URL = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=RELIANCE.BSE&outputsize=compact&apikey=${API_KEY}`;
+
+export async function fetchMarketData() {
   try {
     const response = await axios.get(MARKET_SERVICE_URL, {
-      params: { symbol },
-      timeout: 400,
+      timeout: 10000,
     });
 
-    const data = response.data;
+    console.log("ALPHA VANTAGE RAW RESPONSE:", response.data);
 
-    return {
-      symbol,
-      ltp: data.ltp ?? null,
-      bid: data.bid ?? null,
-      ask: data.ask ?? null,
-      volume: data.volume ?? null,
-      timestamp: new Date().toISOString(),
-      source: "market_service",
-    };
+    return response.data;
   } catch (err) {
-    // 🔥 SAFE FALLBACK
-    return {
-      symbol,
-      ltp: null,
-      bid: null,
-      ask: null,
-      volume: null,
-      timestamp: new Date().toISOString(),
-      source: "STALE_DATA",
-    };
+    console.error("MARKET FETCH ERROR:", err.message);
+    return { error: err.message };
   }
 }
+
