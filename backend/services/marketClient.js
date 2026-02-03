@@ -12,8 +12,6 @@ export async function fetchMarketData() {
       timeout: 10000,
     });
 
-    console.log("ALPHA VANTAGE RAW RESPONSE:", response.data);
-
     return response.data;
   } catch (err) {
     console.error("MARKET FETCH ERROR:", err.message);
