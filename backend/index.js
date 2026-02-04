@@ -4,7 +4,7 @@ import healthCheckRoute from "./routes/healthcheck.js";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { startYahooFeed } from "./services/yahooFeed.js";
-
+import tradeRoute from "./routes/place_trade.js";
 
 dotenv.config();
 
@@ -14,6 +14,7 @@ app.use(express.json());
 // ROUTES
 app.use("/market", marketRoutes);
 app.use("/health", healthCheckRoute);
+app.use("/paper", tradeRoute)
 
 mongoose
   .connect(process.env.MONGO_URI)
