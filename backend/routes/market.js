@@ -1,19 +1,25 @@
 import express from "express";
 import { fetchMarketData } from "../services/marketClient.js";
-// import { MarketSnapshotSchema } from "../schemas/market_snapshot_schema.js";
 
 const router = express.Router();
 
-router.get("/market/live", async (req, res) => {
-  const data = await fetchMarketData();
+router.get("/live", async (req, res) => {
+  try {
+    const symbol = req.query.symbol || "NIFTY";
 
-  console.log("ROUTE DATA:", data);
+    const data = await fetchMarketData(symbol);
 
-  res.json({
-    success: true,
-    received: data,
-  });
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (err) {
+    console.error("Market route error:", err.message);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch market data",
+    });
+  }
 });
-
 
 export default router;

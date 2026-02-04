@@ -1,5 +1,6 @@
 {
   "name": "backend",
+  "type": "module",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -14,7 +15,9 @@
     "axios": "^1.13.4",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "ioredis": "^5.9.2",
     "mongoose": "^9.1.5",
+    "yahoo-finance2": "^3.13.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
