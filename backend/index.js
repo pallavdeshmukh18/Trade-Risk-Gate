@@ -17,7 +17,9 @@ app.use("/health", healthCheckRoute);
 app.use("/paper", tradeRoute)
 
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI, {
+    dbName: "riskgate",
+  })
   .then(async () => {
     console.log("Mongo connected");
 
