@@ -4,6 +4,7 @@ import healthCheckRoute from "./routes/healthcheck.js";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { startYahooFeed } from "./services/yahooFeed.js";
+import tradeRoute from "./routes/place_trade.js";
 import portfolioRoutes from "./routes/portfolio.js";
 import authRoutes from "./routes/auth.js";
 
@@ -16,6 +17,7 @@ app.use(express.json());
 app.use("/auth", authRoutes);
 app.use("/market", marketRoutes);
 app.use("/health", healthCheckRoute);
+app.use("/paper", tradeRoute)
 
 // PROTECTED DOMAIN ROUTES
 app.use("/portfolio", portfolioRoutes);

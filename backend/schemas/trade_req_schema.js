@@ -6,6 +6,6 @@ export const TradeRequestSchema = z.object({
   quantity: z.number().int().positive(),
   order_type: z.enum(["MARKET", "LIMIT"]),
   price: z.number().optional(),
-  strategy_id: z.string(),
+  strategy_id: z.string().nullable(),
   timestamp: z.string().datetime()
 });
