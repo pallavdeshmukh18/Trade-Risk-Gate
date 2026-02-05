@@ -12,7 +12,7 @@ const router = express.Router();
 router.use(authMiddleware);
 const TEST_USER = "user_1";
 
-router.get("/portfolio/state", async (req, res) => {
+router.get("/state", async (req, res) => {
     try {
         const state = await getPortfolioState(TEST_USER);
         res.json(state);
@@ -21,7 +21,7 @@ router.get("/portfolio/state", async (req, res) => {
         res.status(500).json({ error: "Failed to fetch portfolio state" });
     }
 });
-router.get("/portfolio/positions", async (req, res) => {
+router.get("/positions", async (req, res) => {
     try {
         const positions = await Position.find({ userId: TEST_USER });
         res.json(positions);
@@ -30,7 +30,7 @@ router.get("/portfolio/positions", async (req, res) => {
     }
 });
 
-router.post("/portfolio/sync", async (req, res) => {
+router.post("/sync", async (req, res) => {
     try {
         const result = await syncPortfolioWithMarket(TEST_USER);
         res.json({
