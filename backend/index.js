@@ -23,13 +23,9 @@ app.use("/paper", tradeRoute)
 app.use("/portfolio", portfolioRoutes);
 
 mongoose
-<<<<<<< HEAD
   .connect(process.env.MONGO_URI, {
     dbName: "riskgate",
   })
-=======
-  .connect(process.env.MONGO_URI, { dbName: "riskgate" })
->>>>>>> 615d57561856c30aa6db970f7b246f03f0eeff14
   .then(async () => {
     console.log("Mongo connected");
     await startYahooFeed();
