@@ -20,10 +20,22 @@ const PortfolioSchema = new mongoose.Schema(
             default: 0
         },
 
+
         unrealizedPnL: {
             type: Number,
             default: 0
         },
+
+        realizedPnL: {
+            type: Number,
+            default: 0
+        },
+
+        exposure: {
+            type: Number,
+            default: 0
+        },
+
 
         equity: {
             type: Number,

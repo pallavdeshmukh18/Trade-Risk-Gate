@@ -21,8 +21,10 @@ export function computePositionMetrics(position) {
 /**
  * Recalculate entire portfolio metrics
  */
+
 export async function recalcPortfolio(userId) {
     const positions = await Position.find({ userId });
+    const portfolio = await getOrCreatePortfolio(userId);
 
     let totalUnrealizedPnL = 0;
     let totalExposure = 0;
@@ -35,11 +37,18 @@ export async function recalcPortfolio(userId) {
         totalExposure += pos.exposure;
     }
 
+    portfolio.unrealizedPnL = totalUnrealizedPnL;
+    portfolio.exposure = totalExposure; // Ensure portfolio schema has exposure field or ignore if not needed
+    portfolio.equity = portfolio.balance + totalUnrealizedPnL;
+    await portfolio.save();
+
     return {
         totalUnrealizedPnL,
-        totalExposure
+        totalExposure,
+        equity: portfolio.equity
     };
 }
+
 
 export async function getOrCreatePortfolio(userId) {
     let portfolio = await Portfolio.findOne({ userId });
@@ -102,13 +111,19 @@ export async function syncPortfolioWithMarket(userId) {
         totalExposure += pos.exposure;
     }
 
+
     portfolio.unrealizedPnL = totalUnrealizedPnL;
     portfolio.equity = portfolio.balance + totalUnrealizedPnL;
     await portfolio.save();
+
+    // Cache updated positions to Redis
+    const allPositions = await Position.find({ userId });
+    await redis.set(`positions:${userId}`, JSON.stringify(allPositions));
 
     return {
         equity: portfolio.equity,
         unrealizedPnL: totalUnrealizedPnL,
         totalExposure
     };
+
 }

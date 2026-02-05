@@ -12,10 +12,18 @@ const orderSchema = new mongoose.Schema({
   transactionTime: Date
 });
 
-const Order = mongoose.model("positions", orderSchema);
+const Order = mongoose.models.positions || mongoose.model("positions", orderSchema);
 
 const updateOrderData = async (q)=>{
+  try{
     await Order.insertOne(q);
+  } catch(err){
+    return {
+      error: "MONGO_INSERTION_ERR",
+      details: err
+    }
+  }
+    
 };
 
 export default updateOrderData;

@@ -21,14 +21,32 @@ router.get("/portfolio/state", async (req, res) => {
         res.status(500).json({ error: "Failed to fetch portfolio state" });
     }
 });
+
+import redis from "../services/redisClient.js";
+
+// ... imports
+
 router.get("/portfolio/positions", async (req, res) => {
     try {
+        // 1. Try Cache
+        const cachedPositions = await redis.get(`positions:${TEST_USER}`);
+        if (cachedPositions) {
+            return res.json(JSON.parse(cachedPositions));
+        }
+
+        // 2. Fetch from DB
         const positions = await Position.find({ userId: TEST_USER });
+        
+        // 3. Set Cache (e.g. 5 min expiry)
+        await redis.set(`positions:${TEST_USER}`, JSON.stringify(positions), "EX", 300);
+
         res.json(positions);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "Failed to fetch positions" });
     }
 });
+
 
 router.post("/portfolio/sync", async (req, res) => {
     try {
