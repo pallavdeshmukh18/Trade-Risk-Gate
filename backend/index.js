@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { startYahooFeed } from "./services/yahooFeed.js";
 import tradeRoute from "./routes/place_trade.js";
 import portfolioRoutes from "./routes/portfolio.js";
+import chartRoutes from "./routes/chart.js";
 
 import authRoutes from "./routes/auth.js";
 import getOrder from './routes/getOrders.js';
@@ -36,6 +37,7 @@ app.use((req, res, next) => {
 // PUBLIC ROUTES
 app.use("/auth", authRoutes);
 app.use("/market", marketRoutes);
+app.use("/chart", chartRoutes);
 app.use("/health", healthCheckRoute);
 app.use("/paper", tradeRoute);
 app.use("/paper", getOrder);

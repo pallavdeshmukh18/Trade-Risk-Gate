@@ -2,14 +2,17 @@
 import express from "express";
 import Trade from "../schemas/trade_schema.js";
 import redis from "../services/redisClient.js";
+import authMiddleware from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// GET /pnl/trades?userId=...
+router.use(authMiddleware);
+
+// GET /pnl/trades
 router.get("/pnl/trades", async (req, res) => {
-    const userId = req.query.userId || req.query.userID;
+    const userId = req.user?.userId;
     if (!userId) {
-        return res.status(400).json({ error: "Missing userId" });
+        return res.status(401).json({ error: "Unauthorized - no user ID" });
     }
 
     try {
@@ -39,13 +42,13 @@ router.get("/pnl/trades", async (req, res) => {
     }
 });
 
-// GET /pnl/summary?userId=...
+// GET /pnl/summary
 router.get("/pnl/summary", async (req, res) => {
-    const userId = req.query.userId || req.query.userID;
-     if (!userId) {
-        return res.status(400).json({ error: "Missing userId" });
+    const userId = req.user?.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized - no user ID" });
     }
-    
+
     try {
         const trades = await Trade.find({ userId });
         const totalRealizedPnL = trades.reduce((acc, t) => acc + t.realizedPnL, 0);
@@ -61,7 +64,7 @@ router.get("/pnl/summary", async (req, res) => {
 
     } catch (err) {
         console.error(err);
-         res.status(500).json({ error: "Failed to fetch PnL summary" });
+        res.status(500).json({ error: "Failed to fetch PnL summary" });
     }
 });
 

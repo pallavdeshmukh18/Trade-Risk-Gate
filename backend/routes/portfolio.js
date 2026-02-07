@@ -3,6 +3,7 @@ import { getPortfolioState, syncPortfolioWithMarket } from "../services/portfoli
 import Position from "../schemas/position_schema.js";
 import { recalcPortfolio } from "../services/portfolioEngine.js";
 import authMiddleware from "../middleware/authMiddleware.js";
+import redis from "../services/redisClient.js";
 
 
 
@@ -10,11 +11,14 @@ import authMiddleware from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.use(authMiddleware);
-const TEST_USER = "user_1";
 
 router.get("/state", async (req, res) => {
     try {
-        const state = await getPortfolioState(TEST_USER);
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ error: "Unauthorized - no user ID" });
+        }
+        const state = await getPortfolioState(userId);
         res.json(state);
     } catch (err) {
         console.error(err);
@@ -23,17 +27,21 @@ router.get("/state", async (req, res) => {
 });
 router.get("/positions", async (req, res) => {
     try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ error: "Unauthorized - no user ID" });
+        }
         // 1. Try Cache
-        const cachedPositions = await redis.get(`positions:${TEST_USER}`);
+        const cachedPositions = await redis.get(`positions:${userId}`);
         if (cachedPositions) {
             return res.json(JSON.parse(cachedPositions));
         }
 
         // 2. Fetch from DB
-        const positions = await Position.find({ userId: TEST_USER });
-        
+        const positions = await Position.find({ userId });
+
         // 3. Set Cache (e.g. 5 min expiry)
-        await redis.set(`positions:${TEST_USER}`, JSON.stringify(positions), "EX", 300);
+        await redis.set(`positions:${userId}`, JSON.stringify(positions), "EX", 300);
 
         res.json(positions);
     } catch (err) {
@@ -45,7 +53,11 @@ router.get("/positions", async (req, res) => {
 
 router.post("/sync", async (req, res) => {
     try {
-        const result = await syncPortfolioWithMarket(TEST_USER);
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ error: "Unauthorized - no user ID" });
+        }
+        const result = await syncPortfolioWithMarket(userId);
         res.json({
             success: true,
             equity: result.equity,
