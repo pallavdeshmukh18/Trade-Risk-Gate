@@ -11,15 +11,27 @@ export function calcVol(returns) {
     return Math.sqrt(variance);
 }
 
-export async function updateMarket(symbol, ohlcv) {
-    const closes = ohlcv.map((c) => c.close);
-    const rets = calcReturns(closes);
-    const vol = calcVol(rets);
-    const price = closes.at(-1);
+export async function updateMarket(symbol, ohlcv, options = {}) {
+    const {
+        ohlcvKey = "ohlcv",
+        updateVolatility = true,
+        updatePrice = true,
+    } = options;
 
-    await redis.set(`ohlcv:${symbol}`, JSON.stringify(ohlcv));
-    await redis.set(`volatility:${symbol}`, vol);
-    await redis.set(`live_price:${symbol}`, price);
+    const closes = ohlcv.map((c) => c.close).filter((v) => v != null);
+    const price = closes.length > 0 ? closes.at(-1) : null;
 
-    return { price, volatility: vol };
+    await redis.set(`${ohlcvKey}:${symbol}`, JSON.stringify(ohlcv));
+
+    if (updateVolatility) {
+        const rets = closes.length > 1 ? calcReturns(closes) : [];
+        const vol = rets.length > 0 ? calcVol(rets) : 0;
+        await redis.set(`volatility:${symbol}`, vol);
+    }
+
+    if (updatePrice && price != null) {
+        await redis.set(`live_price:${symbol}`, price);
+    }
+
+    return { price, volatility: updateVolatility ? await redis.get(`volatility:${symbol}`) : null };
 }
