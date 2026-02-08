@@ -1,5 +1,8 @@
 "use client";
 
+import { useAuth } from "@/lib/auth-context";
+import { useFetch } from "@/lib/use-fetch";
+
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
@@ -21,9 +24,17 @@ type ChartModalProps = {
     symbol: string;
     isOpen: boolean;
     onClose: () => void;
+    onTradeSuccess?: () => void;
 };
 
-export default function ChartModal({ symbol, isOpen, onClose }: ChartModalProps) {
+export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: ChartModalProps) {
+    const { token } = useAuth();
+    const { fetchWithAuth } = useFetch();
+    
+    // Trade State
+    const [quantity, setQuantity] = useState<number>(1);
+    const [isTrading, setIsTrading] = useState(false);
+    const [tradeError, setTradeError] = useState<string | null>(null);
     const [candles, setCandles] = useState<Candle[]>([]);
     const [price, setPrice] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -204,12 +215,59 @@ export default function ChartModal({ symbol, isOpen, onClose }: ChartModalProps)
         return () => clearTimeout(timer);
     }, [candles, chartType]);
 
+    const handleTrade = async (side: "BUY" | "SELL") => {
+        if (!price) return;
+        setIsTrading(true);
+        setTradeError(null);
+
+        try {
+             await fetchWithAuth("/paper/place-order", {
+                method: "POST",
+                body: JSON.stringify({
+                    symbol,
+                    quantity,
+                    side, // "BUY" or "SELL" matches backend schema
+                    atp: price,
+                }),
+            });
+            
+            if (onTradeSuccess) onTradeSuccess();
+            onClose();
+        } catch (err) {
+            setTradeError(err instanceof Error ? err.message : "Trade failed");
+        } finally {
+            setIsTrading(false);
+        }
+    };
+    
+    // Listen for Escape key
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", handleEsc);
+        return () => window.removeEventListener("keydown", handleEsc);
+    }, [onClose]);
+
+    useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = "hidden"; // Lock background scroll
+            setTradeError(null);
+            setQuantity(1);
+        } else {
+            document.body.style.overflow = "unset"; // Unlock
+        }
+        return () => {
+            document.body.style.overflow = "unset";
+        };
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     const chartTypes: { value: ChartType; label: string }[] = [
         { value: "candlestick", label: "Candle" },
-        { value: "line", label: "Line" },
         { value: "area", label: "Area" },
+        { value: "line", label: "Line" },
     ];
 
     const timeRanges: TimeRange[] = ["1D", "5D", "1M", "3M", "1Y", "5Y"];
@@ -219,33 +277,40 @@ export default function ChartModal({ symbol, isOpen, onClose }: ChartModalProps)
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
             onClick={onClose}
         >
             <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-[#14161F] w-full max-w-5xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-6xl bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl"
             >
-                <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 className="text-2xl font-bold text-white">{symbol}</h2>
-                            <p className="text-2xl text-white/80 mt-2">
-                                {price ? `₹${price.toFixed(2)}` : "—"}
-                            </p>
+                {/* Header */}
+                <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3">
+                            <span className="text-xl font-bold text-white">{symbol}</span>
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-white/10 text-white/60">NSE</span>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-2 hover:bg-white/10 rounded-lg transition"
-                        >
-                            <X size={24} className="text-white/60" />
-                        </button>
+                        {price && (
+                             <div className={`text-lg font-mono font-medium ${price > (candles[candles.length - 2]?.close || 0) ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                ₹{price.toFixed(2)}
+                             </div>
+                        )}
                     </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
 
-                    {/* Chart Type Selector */}
+                {/* Content - Scrollable with hidden scrollbar */}
+                <div className="p-6 overflow-y-scroll no-scrollbar">
+                    {/* Controls */}
                     <div className="flex items-center justify-between gap-2 mb-4">
                         <div className="flex bg-white/5 rounded-lg p-1 gap-1">
                             {chartTypes.map((type) => (
@@ -324,6 +389,41 @@ export default function ChartModal({ symbol, isOpen, onClose }: ChartModalProps)
                                     <p className="text-white/85">{candles.length}</p>
                                 </div>
                             </>
+                        )}
+                    </div>
+
+                    {/* Trading Controls */}
+                    <div className="mt-6 border-t border-white/10 pt-6">
+                        <div className="flex items-end gap-4">
+                            <div>
+                                <label className="block text-xs text-white/50 mb-1.5 uppercase tracking-wide">Quantity</label>
+                                <input 
+                                    type="number" 
+                                    min="1"
+                                    value={quantity}
+                                    onChange={(e) => setQuantity(Number(e.target.value))}
+                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white w-24 focus:outline-none focus:border-indigo-500 transition"
+                                />
+                            </div>
+                            
+                            <button
+                                onClick={() => handleTrade("BUY")}
+                                disabled={isTrading || !price}
+                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-lg transition"
+                            >
+                                {isTrading ? "Processing..." : "Buy / Long"}
+                            </button>
+                            
+                            <button
+                                onClick={() => handleTrade("SELL")}
+                                disabled={isTrading || !price}
+                                className="flex-1 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-lg transition"
+                            >
+                                {isTrading ? "Processing..." : "Sell / Short"}
+                            </button>
+                        </div>
+                        {tradeError && (
+                            <p className="text-rose-400 text-sm mt-3">{tradeError}</p>
                         )}
                     </div>
                 </div>

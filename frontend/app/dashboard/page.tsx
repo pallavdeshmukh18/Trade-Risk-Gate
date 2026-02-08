@@ -7,6 +7,7 @@ import RiskCard from "@/components/dashboard/RiskCard";
 import ExposureCard from "@/components/dashboard/ExposureCard";
 import RiskFlags from "@/components/dashboard/RiskFlags";
 import LiquidCard from "@/components/dashboard/LiquidCard";
+import ChartModal from "@/components/portfolio/ChartModal";
 import { ProtectedRoute } from "@/components/dashboard/ProtectedRoute";
 import { useFetch } from "@/lib/use-fetch";
 import { useAuth } from "@/lib/auth-context";
@@ -82,6 +83,22 @@ export default function DashboardPage() {
     const [error, setError] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [now, setNow] = useState<Date>(new Date());
+    
+    // Sidebar State
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+    // Chart Modal State
+    const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+    const [isChartOpen, setIsChartOpen] = useState(false);
+
+    const handleSelectSymbol = (symbol: string) => {
+        setSelectedSymbol(symbol);
+        setIsChartOpen(true);
+    };
+
+    const handleTradeSuccess = () => {
+        loadDashboard(); // Refresh portfolio on trade
+    };
 
     const loadDashboard = async () => {
         if (!token) return;
@@ -254,10 +271,17 @@ export default function DashboardPage() {
 
 
                 {/* Sidebar */}
-                <Sidebar />
+                <Sidebar 
+                    onSelectSymbol={handleSelectSymbol} 
+                    isCollapsed={isSidebarCollapsed}
+                    toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                />
 
                 {/* Main Content */}
-                <main className="relative flex-1 ml-64 px-10 py-8 space-y-10">
+                <main 
+                    className={`relative flex-1 px-10 py-8 space-y-10 transition-all duration-300
+                    ${isSidebarCollapsed ? "ml-20" : "ml-64"}`}
+                >
 
                     {/* Top Bar */}
                     <TopBar />
@@ -495,6 +519,15 @@ export default function DashboardPage() {
                         System status: Live • Market data synced • Risk engine active
                     </div>
                 </main>
+                {/* Chart Modal */}
+                {selectedSymbol && (
+                    <ChartModal 
+                        symbol={selectedSymbol}
+                        isOpen={isChartOpen}
+                        onClose={() => setIsChartOpen(false)}
+                        onTradeSuccess={handleTradeSuccess}
+                    />
+                )}
             </div>
         </ProtectedRoute>
     );
