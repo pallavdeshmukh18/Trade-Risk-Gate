@@ -15,9 +15,10 @@ const SEARCH_SYMBOLS = [
 
 type WatchlistProps = {
     onSelectSymbol: (symbol: string) => void;
+    isFullPage?: boolean;
 };
 
-export default function Watchlist({ onSelectSymbol }: WatchlistProps) {
+export default function Watchlist({ onSelectSymbol, isFullPage = false }: WatchlistProps) {
     const { token } = useAuth();
     const { fetchWithAuth } = useFetch();
     
@@ -184,48 +185,59 @@ export default function Watchlist({ onSelectSymbol }: WatchlistProps) {
                 )}
             </AnimatePresence>
 
-            <div className="space-y-1">
+            <div className={isFullPage ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-1"}>
                 {stocks.map((symbol) => (
                     <motion.div
                         key={symbol}
                         layout
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9 }}
                         onClick={() => onSelectSymbol(symbol)}
-                        className="group flex items-center justify-between p-2 rounded-lg hover:bg-white/5 cursor-pointer transition relative"
+                        className={`group flex items-center justify-between p-3 rounded-xl hover:bg-white/5 cursor-pointer transition relative border border-white/5 hover:border-white/10 ${
+                            isFullPage ? "bg-[#1A1D26]/40" : ""
+                        }`}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className={`p-1.5 rounded-md ${
+                        <div className="flex items-center gap-4">
+                            <div className={`p-2 rounded-lg ${
                                 (prices[symbol]?.change || 0) >= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
                             }`}>
-                                {(prices[symbol]?.change || 0) >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                {(prices[symbol]?.change || 0) >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
                             </div>
                             <div>
-                                <div className="text-sm text-white/80 font-medium leading-none mb-0.5">
+                                <div className="text-base text-white/90 font-medium leading-none mb-1">
                                     {symbol}
                                 </div>
-                                <div className="text-[10px] text-white/40 font-mono">
+                                <div className="text-xs text-white/50 font-mono">
                                     {prices[symbol] ? `₹${prices[symbol].price.toFixed(2)}` : "—"}
                                 </div>
                             </div>
                         </div>
                         
+                        <div className="text-right mr-2">
+                             <div className={`text-sm font-medium ${(prices[symbol]?.change || 0) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                                {prices[symbol]?.change ? `${prices[symbol].change > 0 ? "+" : ""}${prices[symbol].change.toFixed(2)}%` : "—"}
+                             </div>
+                        </div>
+
                         <button
                             onClick={(e) => removeStock(symbol, e)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-rose-500/20 hover:text-rose-400 text-white/20 rounded-md transition"
+                            className="opacity-0 group-hover:opacity-100 p-2 hover:bg-rose-500/20 hover:text-rose-400 text-white/20 rounded-lg transition absolute right-2 top-2"
                         >
-                            <Trash2 size={12} />
+                            <Trash2 size={14} />
                         </button>
                     </motion.div>
                 ))}
-                
-                {stocks.length === 0 && (
-                    <div className="text-xs text-white/30 text-center py-4">
-                        No stocks in watchlist
-                    </div>
-                )}
             </div>
+            
+            {stocks.length === 0 && (
+                <div className="text-sm text-white/30 text-center py-12 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-xl">
+                    <p>No stocks in watchlist</p>
+                    <button onClick={() => setIsAdding(true)} className="mt-2 text-indigo-400 hover:text-indigo-300 transition">
+                        Add a stock
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

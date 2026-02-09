@@ -5,6 +5,8 @@ import {
     ShieldAlert,
     Settings,
     LucideIcon,
+    List,
+    History, // Added History icon
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -17,15 +19,13 @@ type NavItemProps = {
 };
 
 type SidebarProps = {
-    onSelectSymbol?: (symbol: string) => void;
     isCollapsed: boolean;
     toggleSidebar: () => void;
 };
 
 import { Menu, ChevronLeft } from "lucide-react";
-import Watchlist from "./Watchlist";
 
-export default function Sidebar({ onSelectSymbol, isCollapsed, toggleSidebar }: SidebarProps) {
+export default function Sidebar({ isCollapsed, toggleSidebar }: SidebarProps) {
     const pathname = usePathname();
 
     return (
@@ -50,11 +50,11 @@ export default function Sidebar({ onSelectSymbol, isCollapsed, toggleSidebar }: 
             <nav className="space-y-2 text-sm text-white/70">
                 <NavItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" active={pathname === "/dashboard"} isCollapsed={isCollapsed} />
                 <NavItem icon={Briefcase} label="Portfolio" href="/portfolio" active={pathname === "/portfolio"} isCollapsed={isCollapsed} />
+                <NavItem icon={List} label="Watchlist" href="/watchlist" active={pathname === "/watchlist"} isCollapsed={isCollapsed} />
+                <NavItem icon={History} label="Trades" href="/trades" active={pathname === "/trades"} isCollapsed={isCollapsed} />
                 <NavItem icon={ShieldAlert} label="Risk Engine" href="/risk-engine" isCollapsed={isCollapsed} />
                 <NavItem icon={Settings} label="Settings" href="/settings" isCollapsed={isCollapsed} />
             </nav>
-
-            {!isCollapsed && onSelectSymbol && <Watchlist onSelectSymbol={onSelectSymbol} />}
         </aside>
     );
 }
