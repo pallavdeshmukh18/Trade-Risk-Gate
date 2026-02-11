@@ -1,5 +1,6 @@
 import express from "express";
 import redis from "../services/redisClient.js";
+import { fetchStockDataOnDemand } from "../services/yahooFeed.js";
 
 const router = express.Router();
 
@@ -18,13 +19,29 @@ router.get("/data", async (req, res) => {
         const price = await redis.get(`live_price:${symbol}`);
         const volatility = await redis.get(`volatility:${symbol}`);
 
+        // If no data found in cache, fetch on-demand
         if (!ohlcvStr) {
-            if (isIntraday) {
-                ohlcvStr = await redis.get(`ohlcv:${symbol}`);
+            console.log(`No cached data for ${symbol}, fetching on-demand...`);
+            const fetchResult = await fetchStockDataOnDemand(symbol);
+
+            if (!fetchResult.success) {
+                return res.status(404).json({
+                    error: `Unable to fetch data for ${symbol}. Please check if the symbol is correct.`
+                });
             }
+
+            // Try to get the data again after fetching
+            ohlcvStr = await redis.get(ohlcvKey);
             if (!ohlcvStr) {
-                return res.status(404).json({ error: `No data found for ${symbol}` });
+                // Fallback to daily data if intraday not available
+                if (isIntraday) {
+                    ohlcvStr = await redis.get(`ohlcv:${symbol}`);
+                }
             }
+        }
+
+        if (!ohlcvStr) {
+            return res.status(404).json({ error: `No data found for ${symbol}` });
         }
 
         let ohlcv = JSON.parse(ohlcvStr);
@@ -34,8 +51,10 @@ router.get("/data", async (req, res) => {
         const timeRanges = {
             "1D": 1 * 24 * 60 * 60 * 1000,
             "5D": 5 * 24 * 60 * 60 * 1000,
+            "1W": 7 * 24 * 60 * 60 * 1000,
             "1M": 30 * 24 * 60 * 60 * 1000,
             "3M": 90 * 24 * 60 * 60 * 1000,
+            "6M": 180 * 24 * 60 * 60 * 1000,
             "1Y": 365 * 24 * 60 * 60 * 1000,
             "5Y": 5 * 365 * 24 * 60 * 60 * 1000,
         };

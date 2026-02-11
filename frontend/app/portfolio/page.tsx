@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useState } from "react";
 import Sidebar from "@/components/dashboard/Sidebar";
 import TopBar from "@/components/dashboard/TopBar";
 import PortfolioSummary from "../../components/portfolio/PortfolioSummary";
@@ -8,6 +9,11 @@ import PositionsTable from "../../components/portfolio/PositionsTable";
 import PortfolioRiskPanel from "../../components/portfolio/PortfolioRiskPanel";
 
 export default function PortfolioPage() {
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
+    const toggleSidebar = () => {
+        setIsCollapsed(!isCollapsed);
+    };
     return (
         <div className="relative flex min-h-screen overflow-hidden bg-[#0A0C12]">
 
@@ -22,9 +28,9 @@ export default function PortfolioPage() {
                 />
             </div>
 
-            <Sidebar />
+            <Sidebar isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
-            <main className="relative flex-1 ml-64 px-10 py-8 space-y-8">
+            <main className={`relative flex-1 transition-all duration-300 px-10 py-8 space-y-8 ${isCollapsed ? "ml-20" : "ml-64"}`}>
                 <div className="flex items-center justify-between">
                     <TopBar title="Portfolio" />
                     <button

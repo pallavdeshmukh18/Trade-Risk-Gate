@@ -6,7 +6,7 @@ import { useFetch } from "@/lib/use-fetch";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
-import { createChart, ColorType, IChartApi, CandlestickSeries, LineSeries, AreaSeries } from "lightweight-charts";
+import { createChart, ColorType, IChartApi, CandlestickSeries, LineSeries, AreaSeries, BarSeries } from "lightweight-charts";
 
 type Candle = {
     time: number;
@@ -17,8 +17,8 @@ type Candle = {
     volume: number;
 };
 
-type ChartType = "candlestick" | "line" | "area";
-type TimeRange = "1D" | "5D" | "1M" | "3M" | "1Y" | "5Y";
+type ChartType = "candlestick" | "line" | "area" | "bar";
+type TimeRange = "1D" | "5D" | "1W" | "1M" | "3M" | "6M" | "1Y" | "5Y";
 
 type ChartModalProps = {
     symbol: string;
@@ -30,7 +30,7 @@ type ChartModalProps = {
 export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: ChartModalProps) {
     const { token } = useAuth();
     const { fetchWithAuth } = useFetch();
-    
+
     // Trade State
     const [quantity, setQuantity] = useState<number>(1);
     const [isTrading, setIsTrading] = useState(false);
@@ -155,6 +155,16 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                         candleStickSeries.setData(formattedCandles);
                         chart.timeScale().fitContent();
                         console.log("Candlestick series added successfully");
+                    } else if (chartType === "bar") {
+                        console.log("Adding bar series");
+                        const barSeries = chart.addSeries(BarSeries, {
+                            upColor: "#10b981",
+                            downColor: "#ef4444",
+                        });
+
+                        barSeries.setData(formattedCandles);
+                        chart.timeScale().fitContent();
+                        console.log("Bar series added successfully");
                     } else if (chartType === "line") {
                         console.log("Adding line series");
                         const lineSeries = chart.addSeries(LineSeries, {
@@ -221,7 +231,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
         setTradeError(null);
 
         try {
-             await fetchWithAuth("/paper/place-order", {
+            await fetchWithAuth("/paper/place-order", {
                 method: "POST",
                 body: JSON.stringify({
                     symbol,
@@ -230,7 +240,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                     atp: price,
                 }),
             });
-            
+
             if (onTradeSuccess) onTradeSuccess();
             onClose();
         } catch (err) {
@@ -239,7 +249,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
             setIsTrading(false);
         }
     };
-    
+
     // Listen for Escape key
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
@@ -265,12 +275,13 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
     if (!isOpen) return null;
 
     const chartTypes: { value: ChartType; label: string }[] = [
-        { value: "candlestick", label: "Candle" },
-        { value: "area", label: "Area" },
+        { value: "candlestick", label: "Candlestick" },
+        { value: "bar", label: "Bar" },
         { value: "line", label: "Line" },
+        { value: "area", label: "Area" },
     ];
 
-    const timeRanges: TimeRange[] = ["1D", "5D", "1M", "3M", "1Y", "5Y"];
+    const timeRanges: TimeRange[] = ["1D", "5D", "1W", "1M", "3M", "6M", "1Y", "5Y"];
 
     return (
         <motion.div
@@ -284,147 +295,189 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-[#14161F] w-full max-w-5xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                className="bg-[#14161F] w-full max-w-7xl rounded-xl border border-white/10 shadow-2xl overflow-hidden flex flex-col max-h-[95vh]"
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-3">
-                            <span className="text-xl font-bold text-white">{symbol}</span>
-                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-white/10 text-white/60">NSE</span>
+                {/* Fixed Header */}
+                <div className="border-b border-white/10 bg-white/[0.02]">
+                    {/* Top Title Bar */}
+                    <div className="flex items-center justify-between px-6 py-3">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl font-bold text-white">{symbol}</span>
+                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-white/10 text-white/70">NSE</span>
+                            </div>
+                            {price && (
+                                <div className="flex items-center gap-3 border-l border-white/10 pl-4">
+                                    <div className={`text-xl font-mono font-semibold ${price > (candles[candles.length - 2]?.close || 0) ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        ₹{price.toFixed(2)}
+                                    </div>
+                                    <div className={`text-sm font-semibold ${price > (candles[candles.length - 2]?.close || 0) ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {((price - (candles[candles.length - 2]?.close || 0)) / (candles[candles.length - 2]?.close || 1) * 100).toFixed(2)}%
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        {price && (
-                             <div className={`text-lg font-mono font-medium ${price > (candles[candles.length - 2]?.close || 0) ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                ₹{price.toFixed(2)}
-                             </div>
-                        )}
+                        <button
+                            onClick={onClose}
+                            className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition"
+                        >
+                            <X size={22} />
+                        </button>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition"
-                    >
-                        <X size={20} />
-                    </button>
+
+                    {/* Controls Bar */}
+                    <div className="flex items-center justify-between px-6 py-3 border-t border-white/5">
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs text-white/50 uppercase tracking-wider font-semibold">Type</span>
+                            <div className="flex gap-1">
+                                {chartTypes.map((type) => (
+                                    <button
+                                        key={type.value}
+                                        onClick={() => setChartType(type.value)}
+                                        className={`px-2.5 py-1 text-xs font-semibold rounded transition ${chartType === type.value
+                                                ? "bg-emerald-500 text-white"
+                                                : "text-white/60 hover:text-white/90 hover:bg-white/10"
+                                            }`}
+                                    >
+                                        {type.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Timeframes Bar */}
+                    <div className="flex items-center gap-2 px-6 py-2.5 border-t border-white/5 bg-white/[0.01]">
+                        {timeRanges.map((range) => (
+                            <button
+                                key={range}
+                                onClick={() => setTimeRange(range)}
+                                className={`px-2.5 py-1 text-xs font-semibold rounded transition ${timeRange === range
+                                        ? "bg-emerald-500 text-white"
+                                        : "text-white/60 hover:text-white/90 hover:bg-white/10"
+                                    }`}
+                            >
+                                {range}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                {/* Content - Scrollable with hidden scrollbar */}
-                <div className="p-6 overflow-y-scroll no-scrollbar">
-                    {/* Controls */}
-                    <div className="flex items-center justify-between gap-2 mb-4">
-                        <div className="flex bg-white/5 rounded-lg p-1 gap-1">
-                            {chartTypes.map((type) => (
-                                <button
-                                    key={type.value}
-                                    onClick={() => setChartType(type.value)}
-                                    className={`px-4 py-2 rounded-md text-sm font-medium transition ${chartType === type.value
-                                            ? "bg-emerald-500/20 text-emerald-400"
-                                            : "text-white/60 hover:text-white/90 hover:bg-white/5"
-                                        }`}
-                                >
-                                    {type.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Time Range Selector */}
-                    <div className="flex items-center gap-2 mb-4">
-                        <div className="flex bg-white/5 rounded-lg p-1 gap-1">
-                            {timeRanges.map((range) => (
-                                <button
-                                    key={range}
-                                    onClick={() => setTimeRange(range)}
-                                    className={`px-4 py-2 rounded-md text-sm font-medium transition ${timeRange === range
-                                            ? "bg-blue-500/20 text-blue-400"
-                                            : "text-white/60 hover:text-white/90 hover:bg-white/5"
-                                        }`}
-                                >
-                                    {range}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {isLoading ? (
-                        <div className="h-[500px] flex items-center justify-center text-white/50 bg-[#000000] border border-white/5 rounded-xl">
-                            Loading chart data...
-                        </div>
-                    ) : candles.length > 0 ? (
-                        <div className="w-full bg-[#000000] border border-white/5 rounded-xl overflow-hidden" style={{ height: "500px" }}>
+                {/* Main Content Grid - Chart + Right Panel */}
+                <div className="flex-1 overflow-hidden flex">
+                    {/* Chart Area - Left Side */}
+                    <div className="flex-1 overflow-hidden border-r border-white/10">
+                        {isLoading ? (
+                            <div className="w-full h-full flex items-center justify-center text-white/50">
+                                <div className="text-center">
+                                    <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-emerald-400 animate-spin mx-auto mb-3"></div>
+                                    Loading chart...
+                                </div>
+                            </div>
+                        ) : candles.length > 0 ? (
                             <div
                                 ref={chartContainerRef}
                                 style={{ width: "100%", height: "100%", display: "block" }}
                             />
-                        </div>
-                    ) : (
-                        <div className="h-[500px] flex items-center justify-center text-white/50 bg-[#000000] border border-white/5 rounded-xl">
-                            No chart data available
-                        </div>
-                    )}
-
-                    <div className="mt-6 grid grid-cols-4 gap-4 text-sm">
-                        {candles.length > 0 && (
-                            <>
-                                <div>
-                                    <p className="text-white/50">High</p>
-                                    <p className="text-emerald-400 font-semibold">
-                                        ₹{Math.max(...candles.map((c) => c.high)).toFixed(2)}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-white/50">Low</p>
-                                    <p className="text-red-400 font-semibold">
-                                        ₹{Math.min(...candles.map((c) => c.low)).toFixed(2)}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-white/50">Volume</p>
-                                    <p className="text-white/85">
-                                        {(candles[candles.length - 1].volume / 1_000_000).toFixed(2)}M
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-white/50">Data Points</p>
-                                    <p className="text-white/85">{candles.length}</p>
-                                </div>
-                            </>
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-white/50">
+                                No chart data available
+                            </div>
                         )}
                     </div>
 
-                    {/* Trading Controls */}
-                    <div className="mt-6 border-t border-white/10 pt-6">
-                        <div className="flex items-end gap-4">
-                            <div>
-                                <label className="block text-xs text-white/50 mb-1.5 uppercase tracking-wide">Quantity</label>
-                                <input 
-                                    type="number" 
-                                    min="1"
-                                    value={quantity}
-                                    onChange={(e) => setQuantity(Number(e.target.value))}
-                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white w-24 focus:outline-none focus:border-indigo-500 transition"
-                                />
-                            </div>
-                            
-                            <button
-                                onClick={() => handleTrade("BUY")}
-                                disabled={isTrading || !price}
-                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-lg transition"
-                            >
-                                {isTrading ? "Processing..." : "Buy / Long"}
-                            </button>
-                            
-                            <button
-                                onClick={() => handleTrade("SELL")}
-                                disabled={isTrading || !price}
-                                className="flex-1 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-lg transition"
-                            >
-                                {isTrading ? "Processing..." : "Sell / Short"}
-                            </button>
+                    {/* Right Panel - Trading Form & Info */}
+                    <div className="w-80 border-l border-white/10 flex flex-col overflow-hidden bg-white/[0.01]">
+                        {/* Statistics */}
+                        <div className="px-4 py-3 border-b border-white/5">
+                            {candles.length > 0 && (
+                                <div className="space-y-2 text-xs">
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">Open</span>
+                                        <span className="text-white/90 font-mono">{candles[0]?.open.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-emerald-400">High</span>
+                                        <span className="text-white/90 font-mono">{Math.max(...candles.map((c) => c.high)).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-rose-400">Low</span>
+                                        <span className="text-white/90 font-mono">{Math.min(...candles.map((c) => c.low)).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">Close</span>
+                                        <span className="text-white/90 font-mono">{candles[candles.length - 1]?.close.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between border-t border-white/5 pt-2 mt-2">
+                                        <span className="text-white/60">Volume</span>
+                                        <span className="text-white/90 font-mono">{(candles[candles.length - 1].volume / 1_000_000).toFixed(2)}M</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        {tradeError && (
-                            <p className="text-rose-400 text-sm mt-3">{tradeError}</p>
-                        )}
+
+                        {/* Scrollable Trading Panel */}
+                        <div className="flex-1 overflow-y-auto no-scrollbar">
+                            {/* Trading Form */}
+                            <div className="p-4 space-y-4 border-b border-white/5">
+                                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Trade</h3>
+
+                                <div>
+                                    <label className="block text-xs text-white/50 mb-2 uppercase tracking-wide font-semibold">
+                                        Quantity
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={quantity}
+                                        onChange={(e) => setQuantity(Number(e.target.value))}
+                                        className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-emerald-500 transition text-sm"
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={() => handleTrade("BUY")}
+                                    disabled={isTrading || !price}
+                                    className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded transition text-sm"
+                                >
+                                    {isTrading ? "Processing..." : "BUY"}
+                                </button>
+
+                                <button
+                                    onClick={() => handleTrade("SELL")}
+                                    disabled={isTrading || !price}
+                                    className="w-full bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded transition text-sm"
+                                >
+                                    {isTrading ? "Processing..." : "SELL"}
+                                </button>
+
+                                {tradeError && (
+                                    <p className="text-rose-400 text-xs font-medium bg-rose-500/10 border border-rose-500/30 rounded px-3 py-2">
+                                        {tradeError}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Additional Info Panels */}
+                            <div className="p-4 space-y-4">
+                                <div className="bg-white/[0.05] rounded p-3 border border-white/10">
+                                    <h4 className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Position Limits</h4>
+                                    <div className="text-xs space-y-1.5">
+                                        <div className="flex justify-between"><span className="text-white/60">Max Qty</span><span className="text-white/90">100</span></div>
+                                        <div className="flex justify-between"><span className="text-white/60">Min Order</span><span className="text-white/90">₹500</span></div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white/[0.05] rounded p-3 border border-white/10">
+                                    <h4 className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Market Info</h4>
+                                    <div className="text-xs space-y-1.5">
+                                        <div className="flex justify-between"><span className="text-white/60">Status</span><span className="text-emerald-400">Open</span></div>
+                                        <div className="flex justify-between"><span className="text-white/60">52W High</span><span className="text-white/90">N/A</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </motion.div>

@@ -7,6 +7,8 @@ import { startYahooFeed } from "./services/yahooFeed.js";
 import tradeRoute from "./routes/place_trade.js";
 import portfolioRoutes from "./routes/portfolio.js";
 import chartRoutes from "./routes/chart.js";
+import watchlistRoutes from "./routes/watchlist.js";
+import searchRoutes from "./routes/search.js";
 
 import authRoutes from "./routes/auth.js";
 import getOrder from './routes/getOrders.js';
@@ -40,11 +42,13 @@ app.use("/market", marketRoutes);
 app.use("/chart", chartRoutes);
 app.use("/health", healthCheckRoute);
 app.use("/paper", tradeRoute);
+app.use("/search", searchRoutes);
 app.use("/paper", getOrder);
 
 // PROTECTED DOMAIN ROUTES
 app.use("/portfolio", portfolioRoutes); // Note: portfolioRoutes mounts confirm logic
 app.use("/stats", pnlRoutes);
+app.use("/watchlist", watchlistRoutes);
 
 
 mongoose
