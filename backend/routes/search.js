@@ -53,6 +53,7 @@ const POPULAR_STOCKS = {
         { symbol: "APOLLOHOSP", name: "Apollo Hospitals" },
         { symbol: "HEROMOTOCO", name: "Hero MotoCorp" },
         { symbol: "UPL", name: "UPL Limited" },
+        { symbol: "CUPID", name: "Cupid Limited" },
     ],
     us: [
         { symbol: "AAPL", name: "Apple Inc." },
@@ -85,12 +86,25 @@ const POPULAR_STOCKS = {
     ]
 };
 
-// Flatten all stocks for searching
+// Flatten only Indian stocks for searching (restrict to Indian market only)
 const ALL_STOCKS = [
     ...POPULAR_STOCKS.indian,
-    ...POPULAR_STOCKS.us,
-    ...POPULAR_STOCKS.indices
+    // Only NIFTY 50 and BSE SENSEX indices are allowed
+    { symbol: "^NSEI", name: "NIFTY 50" },
+    { symbol: "^BSESN", name: "BSE SENSEX" },
 ];
+
+// US stocks that are explicitly blocked
+const BLOCKED_US_STOCKS = new Set([
+    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "AMD", "NFLX", "INTC",
+    "JPM", "BAC", "WFC", "V", "MA", "WMT", "DIS", "COCA", "PEP", "MCD",
+    "GOOG", "CSCO", "ORCL", "IBM", "CRM", "ADBE", "PYPL", "UBER", "SNAP", "SPOT"
+]);
+
+// List of valid Indian stock symbols for validation
+const INDIAN_STOCK_SYMBOLS = new Set(
+    POPULAR_STOCKS.indian.map(s => s.symbol.toUpperCase())
+);
 
 // GET /search/stocks?q=REL
 router.get("/stocks", async (req, res) => {
@@ -101,48 +115,95 @@ router.get("/stocks", async (req, res) => {
             return res.json({ results: [] });
         }
 
-        // Search in our popular stocks database
-        const matches = ALL_STOCKS.filter(stock =>
+        // First, check popular stocks database for quick results
+        let results = ALL_STOCKS.filter(stock =>
             stock.symbol.includes(query) ||
             stock.name.toUpperCase().includes(query)
         ).slice(0, 10);
 
-        // If we have matches, return them
-        if (matches.length > 0) {
+        // If popular stocks found, return them
+        if (results.length > 0) {
             return res.json({
-                results: matches.map(s => ({
+                results: results.map(s => ({
                     symbol: s.symbol,
-                    name: s.name
+                    name: s.name,
+                    exchange: s.symbol.startsWith("^") ? "INDEX" : "NSE"
                 }))
             });
         }
 
-        // If no matches in popular stocks, try Yahoo Finance search
+        // If no popular stocks match, search via Yahoo Finance
         try {
-            const yahooResults = await yahoo.search(query, {
-                quotesCount: 5,
-                newsCount: 0
-            });
+            const searchResult = await yahoo.search(query);
 
-            const suggestions = yahooResults.quotes
-                ?.filter(q => q.symbol && q.shortname)
-                .map(q => ({
-                    symbol: q.symbol,
-                    name: q.shortname || q.longname || q.symbol
-                }))
-                .slice(0, 5) || [];
+            if (searchResult?.quotes && Array.isArray(searchResult.quotes) && searchResult.quotes.length > 0) {
+                // Filter for Indian market stocks only
+                const indianStocks = searchResult.quotes
+                    .filter(quote => {
+                        const sym = quote.symbol?.toUpperCase() || "";
+                        // Include NSE (.NS), BSE (.BO), and Indian indices  
+                        // Exclude US symbols and indices
+                        return (sym.includes(".NS") || sym.includes(".BO") || sym.includes("^NSEI") || sym.includes("^BSESN"))
+                            && !sym.includes('^GSPC') && !sym.includes('^DJI') && !sym.includes('^IXIC');
+                    })
+                    .slice(0, 10)
+                    .map(quote => {
+                        // Clean symbol: remove .NS/.BO suffix for internal use
+                        const cleanSymbol = quote.symbol?.replace(".NS", "").replace(".BO", "") || quote.symbol;
+                        return {
+                            symbol: cleanSymbol,
+                            name: quote.longname || quote.shortname || cleanSymbol,
+                            exchange: quote.symbol?.includes(".NS") ? "NSE" : quote.symbol?.includes(".BO") ? "BSE" : "INDEX"
+                        };
+                    });
 
-            return res.json({ results: suggestions });
+                if (indianStocks.length > 0) {
+                    return res.json({ results: indianStocks });
+                }
+            }
+
+            // If Yahoo search didn't return Indian stocks, but query matches pattern, 
+            // accept it as a potential Indian stock symbol (blacklist approach)
+            // Only reject if it's a known US stock
+            if (!BLOCKED_US_STOCKS.has(query)) {
+                // Return the query as a potential Indian stock
+                return res.json({
+                    results: [{
+                        symbol: query,
+                        name: `${query} (Indian Stock)`,
+                        exchange: "NSE"
+                    }]
+                });
+            }
+
         } catch (yahooError) {
-            console.error("Yahoo search error:", yahooError);
-            // Return empty results if Yahoo search fails
-            return res.json({ results: [] });
+            // If Yahoo search fails, still allow the query as a potential Indian stock
+            console.error("Yahoo search error:", yahooError.message);
+
+            if (!BLOCKED_US_STOCKS.has(query)) {
+                return res.json({
+                    results: [{
+                        symbol: query,
+                        name: `${query} (Indian Stock)`,
+                        exchange: "NSE"
+                    }]
+                });
+            }
         }
+
+        // No results found
+        return res.json({ results: [] });
 
     } catch (error) {
         console.error("Stock search error:", error);
         res.status(500).json({ error: "Search failed" });
     }
 });
+
+// Export validation function for use in other routes
+router.isIndianStock = function (symbol) {
+    if (!symbol) return false;
+    return INDIAN_STOCK_SYMBOLS.has(symbol.toUpperCase());
+};
 
 export default router;

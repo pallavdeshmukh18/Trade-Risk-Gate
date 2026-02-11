@@ -2,11 +2,23 @@
 
 import { useAuth } from "@/lib/auth-context";
 import { useFetch } from "@/lib/use-fetch";
+import { formatPrice, getCurrency } from "@/lib/currency-utils";
 
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { createChart, ColorType, IChartApi, CandlestickSeries, LineSeries, AreaSeries, BarSeries } from "lightweight-charts";
+
+// Blocked symbols (international stocks)
+const BLOCKED_SYMBOLS = new Set([
+    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "AMD", "NFLX", "INTC",
+    "JPM", "BAC", "WFC", "V", "MA", "WMT", "DIS", "COCA", "PEP", "MCD",
+    "^GSPC", "^DJI", "^IXIC"
+]);
+
+function isBlocked(symbol: string): boolean {
+    return BLOCKED_SYMBOLS.has(symbol.toUpperCase());
+}
 
 type Candle = {
     time: number;
@@ -31,6 +43,9 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
     const { token } = useAuth();
     const { fetchWithAuth } = useFetch();
 
+    // Check if symbol is blocked
+    const isBlockedSymbol = isBlocked(symbol);
+
     // Trade State
     const [quantity, setQuantity] = useState<number>(1);
     const [isTrading, setIsTrading] = useState(false);
@@ -44,7 +59,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
     const chartRef = useRef<IChartApi | null>(null);
 
     useEffect(() => {
-        if (!isOpen) return;
+        if (!isOpen || isBlockedSymbol) return;
 
         const fetchChartData = async () => {
             setIsLoading(true);
@@ -65,7 +80,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
         };
 
         fetchChartData();
-    }, [symbol, isOpen, timeRange]);
+    }, [symbol, isOpen, timeRange, isBlockedSymbol]);
 
     // Initialize and update chart
     useEffect(() => {
@@ -274,6 +289,53 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
 
     if (!isOpen) return null;
 
+    // Show error if stock is blocked (international)
+    if (isBlockedSymbol) {
+        return (
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                onClick={onClose}
+            >
+                <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    className="bg-[#14161F] rounded-xl border border-white/10 shadow-2xl p-8 max-w-md w-full flex flex-col gap-6"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-white">Market Restriction</h2>
+                        <button
+                            onClick={onClose}
+                            className="text-white/60 hover:text-white transition"
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                        <p className="text-white/80">
+                            <span className="text-lg font-bold text-rose-400">{symbol}</span> is not available in the Indian market.
+                        </p>
+                        <p className="text-white/60 text-sm">
+                            Trade-Risk-Gate is restricted to NSE/BSE stocks only. Only Indian market symbols are supported.
+                        </p>
+                    </div>
+
+                    <button
+                        onClick={onClose}
+                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 rounded transition text-sm"
+                    >
+                        Close
+                    </button>
+                </motion.div>
+            </motion.div>
+        );
+    }
+
     const chartTypes: { value: ChartType; label: string }[] = [
         { value: "candlestick", label: "Candlestick" },
         { value: "bar", label: "Bar" },
@@ -310,7 +372,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                             {price && (
                                 <div className="flex items-center gap-3 border-l border-white/10 pl-4">
                                     <div className={`text-xl font-mono font-semibold ${price > (candles[candles.length - 2]?.close || 0) ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        ₹{price.toFixed(2)}
+                                        {formatPrice(price, symbol)}
                                     </div>
                                     <div className={`text-sm font-semibold ${price > (candles[candles.length - 2]?.close || 0) ? 'text-emerald-400' : 'text-rose-400'}`}>
                                         {((price - (candles[candles.length - 2]?.close || 0)) / (candles[candles.length - 2]?.close || 1) * 100).toFixed(2)}%
@@ -336,8 +398,8 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                                         key={type.value}
                                         onClick={() => setChartType(type.value)}
                                         className={`px-2.5 py-1 text-xs font-semibold rounded transition ${chartType === type.value
-                                                ? "bg-emerald-500 text-white"
-                                                : "text-white/60 hover:text-white/90 hover:bg-white/10"
+                                            ? "bg-emerald-500 text-white"
+                                            : "text-white/60 hover:text-white/90 hover:bg-white/10"
                                             }`}
                                     >
                                         {type.label}
@@ -354,8 +416,8 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                                 key={range}
                                 onClick={() => setTimeRange(range)}
                                 className={`px-2.5 py-1 text-xs font-semibold rounded transition ${timeRange === range
-                                        ? "bg-emerald-500 text-white"
-                                        : "text-white/60 hover:text-white/90 hover:bg-white/10"
+                                    ? "bg-emerald-500 text-white"
+                                    : "text-white/60 hover:text-white/90 hover:bg-white/10"
                                     }`}
                             >
                                 {range}
@@ -395,19 +457,19 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                                 <div className="space-y-2 text-xs">
                                     <div className="flex justify-between">
                                         <span className="text-white/60">Open</span>
-                                        <span className="text-white/90 font-mono">{candles[0]?.open.toFixed(2)}</span>
+                                        <span className="text-white/90 font-mono">{formatPrice(candles[0]?.open || 0, symbol)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-emerald-400">High</span>
-                                        <span className="text-white/90 font-mono">{Math.max(...candles.map((c) => c.high)).toFixed(2)}</span>
+                                        <span className="text-white/90 font-mono">{formatPrice(Math.max(...candles.map((c) => c.high)), symbol)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-rose-400">Low</span>
-                                        <span className="text-white/90 font-mono">{Math.min(...candles.map((c) => c.low)).toFixed(2)}</span>
+                                        <span className="text-white/90 font-mono">{formatPrice(Math.min(...candles.map((c) => c.low)), symbol)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-white/60">Close</span>
-                                        <span className="text-white/90 font-mono">{candles[candles.length - 1]?.close.toFixed(2)}</span>
+                                        <span className="text-white/90 font-mono">{formatPrice(candles[candles.length - 1]?.close || 0, symbol)}</span>
                                     </div>
                                     <div className="flex justify-between border-t border-white/5 pt-2 mt-2">
                                         <span className="text-white/60">Volume</span>
@@ -465,7 +527,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                                     <h4 className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Position Limits</h4>
                                     <div className="text-xs space-y-1.5">
                                         <div className="flex justify-between"><span className="text-white/60">Max Qty</span><span className="text-white/90">100</span></div>
-                                        <div className="flex justify-between"><span className="text-white/60">Min Order</span><span className="text-white/90">₹500</span></div>
+                                        <div className="flex justify-between"><span className="text-white/60">Min Order</span><span className="text-white/90">{getCurrency(symbol).symbol}500</span></div>
                                     </div>
                                 </div>
 

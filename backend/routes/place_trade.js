@@ -3,9 +3,19 @@ import express from "express";
 import { TradeRequestSchema } from "../schemas/trade_req_schema.js";
 import { executeOrder } from "../services/orderExecution.js";
 import authMiddleware from "../middleware/authMiddleware.js";
+import searchRouter from "./search.js";
 
 const router = express.Router();
 const schema = TradeRequestSchema;
+
+// Symbols to explicitly block (international stocks)
+const BLOCKED_SYMBOLS = new Set([
+    // US stocks
+    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "AMD", "NFLX", "INTC",
+    "JPM", "BAC", "WFC", "V", "MA", "WMT", "DIS", "COCA", "PEP", "MCD",
+    // Indices we don't want
+    "^GSPC", "^DJI", "^IXIC"
+]);
 
 router.use(authMiddleware);
 
@@ -18,9 +28,24 @@ router.post("/place-order", async (req, res) => {
     }
 
     try {
+        const symbol = req.body.symbol?.toUpperCase();
+
+        // Validate symbol is provided
+        if (!symbol) {
+            return res.status(400).json({ error: "Symbol is required" });
+        }
+
+        // Block explicitly international symbols
+        if (BLOCKED_SYMBOLS.has(symbol)) {
+            return res.status(403).json({
+                error: "RESTRICTED_MARKET",
+                details: `Symbol '${symbol}' is not available in the Indian market. Only NSE/BSE stocks are allowed.`
+            });
+        }
+
         const orderData = {
             userId: userId, // Use JWT user ID only
-            symbol: req.body.symbol,
+            symbol: symbol,
             atp: Number(req.body.atp),
             side: req.body.side,
             quantity: Number(req.body.quantity),

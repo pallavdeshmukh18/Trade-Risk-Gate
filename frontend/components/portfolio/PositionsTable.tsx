@@ -2,10 +2,22 @@
 
 import LiquidCard from "@/components/dashboard/LiquidCard";
 import ChartModal from "./ChartModal";
+import { formatPrice } from "@/lib/currency-utils";
 import { motion } from "framer-motion";
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useFetch } from "@/lib/use-fetch";
+
+// Blocked symbols (international stocks)
+const BLOCKED_SYMBOLS = new Set([
+    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "AMD", "NFLX", "INTC",
+    "JPM", "BAC", "WFC", "V", "MA", "WMT", "DIS", "COCA", "PEP", "MCD",
+    "^GSPC", "^DJI", "^IXIC"
+]);
+
+function isBlocked(symbol: string): boolean {
+    return BLOCKED_SYMBOLS.has(symbol.toUpperCase());
+}
 
 type Position = {
     symbol: string;
@@ -28,7 +40,9 @@ export default function PositionsTable() {
         setIsLoading(true);
         try {
             const data = await fetchWithAuth("/portfolio/positions");
-            setPositions(data || []);
+            // Filter to exclude blocked international stocks
+            const validPositions = (data || []).filter((pos: Position) => !isBlocked(pos.symbol));
+            setPositions(validPositions);
         } catch (err) {
             console.error("Failed to fetch positions:", err);
         } finally {
@@ -103,13 +117,13 @@ export default function PositionsTable() {
                                 >
                                     <td className="px-6 py-4 font-medium text-white">{pos.symbol}</td>
                                     <td className="text-right pr-4">{pos.quantity}</td>
-                                    <td className="text-right pr-4">₹{pos.avgEntryPrice.toFixed(2)}</td>
-                                    <td className="text-right pr-4">₹{pos.currentPrice.toFixed(2)}</td>
+                                    <td className="text-right pr-4">{formatPrice(pos.avgEntryPrice, pos.symbol)}</td>
+                                    <td className="text-right pr-4">{formatPrice(pos.currentPrice, pos.symbol)}</td>
                                     <td
                                         className={`text-right pr-4 ${pos.unrealizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"
                                             }`}
                                     >
-                                        {pos.unrealizedPnL >= 0 ? "+" : ""}₹{pos.unrealizedPnL.toFixed(0)}
+                                        {pos.unrealizedPnL >= 0 ? "+" : ""}{formatPrice(pos.unrealizedPnL, pos.symbol)}
                                     </td>
                                     <td className="pr-6 text-right">{pos.exposure.toFixed(1)}%</td>
                                 </motion.tr>

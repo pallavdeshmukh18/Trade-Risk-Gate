@@ -3,6 +3,18 @@ import { Search, Plus, Trash2, TrendingUp, TrendingDown, Activity, X } from "luc
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/lib/use-fetch";
 import { useAuth } from "@/lib/auth-context";
+import { formatPrice } from "@/lib/currency-utils";
+
+// Blocked symbols (international stocks)
+const BLOCKED_SYMBOLS = new Set([
+    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "AMD", "NFLX", "INTC",
+    "JPM", "BAC", "WFC", "V", "MA", "WMT", "DIS", "COCA", "PEP", "MCD",
+    "^GSPC", "^DJI", "^IXIC"
+]);
+
+function isBlocked(symbol: string): boolean {
+    return BLOCKED_SYMBOLS.has(symbol.toUpperCase());
+}
 
 type SearchResult = {
     symbol: string;
@@ -30,6 +42,7 @@ export default function Watchlist({ onSelectSymbol, isFullPage = false }: Watchl
     const [stocks, setStocks] = useState<string[]>([]);
     const [search, setSearch] = useState("");
     const [isAdding, setIsAdding] = useState(false);
+    const [addError, setAddError] = useState<string | null>(null);
     const [stockData, setStockData] = useState<Record<string, StockData>>({});
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -181,8 +194,16 @@ export default function Watchlist({ onSelectSymbol, isFullPage = false }: Watchl
         const symbol = symbolParam || search.toUpperCase();
         if (!symbol) return;
 
+        // Block known international symbols
+        if (isBlocked(symbol)) {
+            setAddError(`"${symbol}" is not available in the Indian market. Only NSE/BSE stocks are supported.`);
+            setTimeout(() => setAddError(null), 3000);
+            return;
+        }
+
         if (!stocks.includes(symbol)) {
             setStocks([...stocks, symbol]);
+            setAddError(null);
         }
         setSearch("");
         setSearchResults([]);
@@ -249,12 +270,19 @@ export default function Watchlist({ onSelectSymbol, isFullPage = false }: Watchl
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                placeholder="Search stocks (e.g. AAPL, RELIANCE, TCS)..."
+                                placeholder="Search stocks (e.g. RELIANCE, TCS, INFY)..."
                                 className="w-full bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-indigo-500/50 focus:bg-white/10 transition"
                                 autoFocus
                             />
                             <Search size={16} className="absolute left-3 top-3.5 text-white/40" />
                         </div>
+
+                        {/* Error Message */}
+                        {addError && (
+                            <div className="mt-2 px-3 py-2 bg-rose-500/10 border border-rose-500/30 rounded-lg">
+                                <p className="text-xs text-rose-400">{addError}</p>
+                            </div>
+                        )}
 
                         {/* Dropdown Results */}
                         {isSearching && search.length > 0 && (
@@ -359,38 +387,40 @@ export default function Watchlist({ onSelectSymbol, isFullPage = false }: Watchl
                                     {/* Middle: Price */}
                                     <div className="text-center">
                                         <div className="text-2xl font-bold text-white/95 font-mono">
-                                            {data ? `₹${data.price.toFixed(2)}` : "—"}
+                                            {data ? formatPrice(data.price, symbol) : "—"}
                                         </div>
                                         {data && (
                                             <div className="text-xs text-white/40 mt-1">
-                                                Open: ₹{data.open.toFixed(2)}
+                                                Open: {formatPrice(data.open, symbol)}
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Right: Change */}
-                                    <div className="text-right min-w-[140px]">
-                                        {data ? (
-                                            <>
-                                                <div className={`text-xl font-bold mb-1 ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>
-                                                    {isPositive ? "+" : ""}{data.changePercent.toFixed(2)}%
-                                                </div>
-                                                <div className={`text-sm font-medium ${isPositive ? "text-emerald-400/70" : "text-rose-400/70"}`}>
-                                                    {isPositive ? "+" : ""}₹{data.changeValue.toFixed(2)}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="text-white/40">—</div>
-                                        )}
-                                    </div>
+                                    {/* Right: Change and Delete */}
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-right">
+                                            {data ? (
+                                                <>
+                                                    <div className={`text-xl font-bold mb-1 ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>
+                                                        {isPositive ? "+" : ""}{data.changePercent.toFixed(2)}%
+                                                    </div>
+                                                    <div className={`text-sm font-medium ${isPositive ? "text-emerald-400/70" : "text-rose-400/70"}`}>
+                                                        {isPositive ? "+" : ""}{formatPrice(data.changeValue, symbol)}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="text-white/40">—</div>
+                                            )}
+                                        </div>
 
-                                    {/* Delete Button */}
-                                    <button
-                                        onClick={(e) => removeStock(symbol, e)}
-                                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 p-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 rounded-lg transition-all duration-200"
-                                    >
-                                        <X size={14} />
-                                    </button>
+                                        {/* Delete Button */}
+                                        <button
+                                            onClick={(e) => removeStock(symbol, e)}
+                                            className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1.5 text-white/40 hover:text-rose-400 transition-colors duration-200"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </motion.div>
