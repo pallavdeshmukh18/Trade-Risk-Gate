@@ -21,6 +21,11 @@ function isBlocked(symbol: string): boolean {
     return BLOCKED_SYMBOLS.has(symbol.toUpperCase());
 }
 
+function formatChartSymbol(symbol: string): string {
+    const normalized = symbol.trim().toUpperCase();
+    return normalized.includes(".") ? normalized : `${normalized}.NS`;
+}
+
 type Candle = {
     time: number;
     open: number;
@@ -139,6 +144,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
     const [timeRange, setTimeRange] = useState<TimeRange>("1D");
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
+    const formattedSymbol = formatChartSymbol(symbol);
 
     useEffect(() => {
         if (!isOpen || isBlockedSymbol) return;
@@ -146,19 +152,22 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
         const fetchChartData = async () => {
             setIsLoading(true);
             try {
-                const response = await fetch(`/api/ml/chart?symbol=${symbol}&range=${timeRange}`);
+                const response = await fetch(`/api/ml/chart?symbol=${formattedSymbol}&range=${timeRange}`);
                 const data = await response.json();
-                setCandles(data.candles || []);
-                setPrice(data.price);
+                const nextCandles = Array.isArray(data.candles) ? data.candles : [];
+                setCandles(nextCandles);
+                setPrice(data.price ?? null);
             } catch (err) {
                 console.error("Failed to fetch chart data:", err);
+                setCandles([]);
+                setPrice(null);
             } finally {
                 setIsLoading(false);
             }
         };
 
         fetchChartData();
-    }, [symbol, isOpen, timeRange, isBlockedSymbol]);
+    }, [formattedSymbol, isOpen, timeRange, isBlockedSymbol]);
 
     useEffect(() => {
         if (!isOpen || !token) return;
@@ -179,7 +188,15 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
 
     // Initialize and update chart
     useEffect(() => {
-        if (!chartContainerRef.current || candles.length === 0) return;
+        if (candles.length === 0) {
+            if (chartRef.current) {
+                chartRef.current.remove();
+                chartRef.current = null;
+            }
+            return;
+        }
+
+        if (!chartContainerRef.current) return;
 
         // Use a small delay to ensure DOM is fully rendered
         const timer = setTimeout(() => {
@@ -637,7 +654,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-white/50">
-                                No chart data available
+                                No data available
                             </div>
                         )}
                     </div>
