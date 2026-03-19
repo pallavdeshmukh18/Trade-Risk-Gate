@@ -22,11 +22,16 @@ type NavItemProps = {
 type SidebarProps = {
     isCollapsed: boolean;
     toggleSidebar: () => void;
+    onSelectSymbol?: (symbol: string) => void;
 };
 
 import { Menu, ChevronLeft } from "lucide-react";
 
-export default function Sidebar({ isCollapsed, toggleSidebar }: SidebarProps) {
+export default function Sidebar({
+    isCollapsed,
+    toggleSidebar,
+    onSelectSymbol,
+}: SidebarProps) {
     const pathname = usePathname();
 
     return (

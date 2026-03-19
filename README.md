@@ -1,22 +1,48 @@
-# Trade-Risk-Gate
+# LowkeyLoss
 
-## Google OAuth setup
+“Before you place a trade… we tell you if it’s lowkey loss.”
 
-Add these environment variables before using Google sign-in:
+LowkeyLoss is a trading intelligence platform that helps users understand risk before executing a trade. It combines a modern web dashboard, backend market and portfolio services, and an ML service that evaluates trade risk, impact, and related signals.
 
-### Backend
+## What It Does
+
+- Analyzes trades before execution
+- Surfaces risk insights and trade-impact signals
+- Tracks portfolio, watchlist, and dashboard views
+- Connects UI workflows with backend APIs and ML predictions
+
+## Project Structure
+
+- `frontend/` - Next.js App Router frontend for dashboard, portfolio, watchlist, risk engine, and auth flows
+- `backend/` - Express API for auth, portfolio, watchlist, trade placement, search, and risk-related routes
+- `ml-service/` - FastAPI + scikit-learn service for prediction and risk scoring workflows
+
+## Quick Start
+
+Frontend:
 
 ```bash
-JWT_SECRET=your-jwt-secret
-MONGO_URI=your-mongodb-uri
-GOOGLE_CLIENT_ID=your-google-oauth-web-client-id
+cd frontend
+npm install
+npm run dev
 ```
 
-### Frontend
+Backend:
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-oauth-web-client-id
+cd backend
+npm install
+npm run dev
 ```
 
-Use the same Google web client ID on both sides. In Google Cloud Console, add `http://localhost:3000` to Authorized JavaScript origins for local development.
+ML service:
+
+```bash
+cd ml-service
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+## In Short
+
+Trade Risk Gate is built to answer one question quickly and clearly: should this trade go through, or is it a lowkey loss waiting to happen?

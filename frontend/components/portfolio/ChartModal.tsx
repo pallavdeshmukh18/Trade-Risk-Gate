@@ -220,8 +220,12 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                             textColor: "#9ca3af",
                         },
                         grid: {
-                            hLineColor: "#ffffff0d",
-                            vLineColor: "#ffffff0d",
+                            horzLines: {
+                                color: "#ffffff0d",
+                            },
+                            vertLines: {
+                                color: "#ffffff0d",
+                            },
                         },
                     });
                 } catch (createError) {
