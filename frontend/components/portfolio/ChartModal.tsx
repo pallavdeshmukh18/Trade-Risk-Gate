@@ -28,6 +28,17 @@ function formatChartSymbol(symbol: string): string {
     return normalized.includes(".") ? normalized : `${normalized}.NS`;
 }
 
+function getChartApiUrl(symbol: string, range: TimeRange): string {
+    const params = new URLSearchParams({ symbol, range });
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
+    if (backendUrl) {
+        return `${backendUrl}/chart?${params.toString()}`;
+    }
+
+    return `/api/ml/chart?${params.toString()}`;
+}
+
 type Candle = {
     time: number;
     open: number;
@@ -156,7 +167,9 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
             setIsLoading(true);
             setChartError(null);
             try {
-                const response = await fetch(`/api/ml/chart?symbol=${formattedSymbol}&range=${timeRange}`);
+                const response = await fetch(getChartApiUrl(formattedSymbol, timeRange), {
+                    cache: "no-store",
+                });
                 const data = await response.json();
 
                 if (!response.ok) {
