@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Load token from localStorage on mount
     useEffect(() => {
-        const storedToken = localStorage.getItem('auth_token');
+        const storedToken = localStorage.getItem('token') || localStorage.getItem('auth_token');
         const storedName = localStorage.getItem('user_name');
         const storedEmail = localStorage.getItem('user_email');
         const storedPicture = localStorage.getItem('user_picture');
@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const persistAuthState = (data: { token: string; name?: string | null; email?: string | null; picture?: string | null }) => {
         setToken(data.token);
+        localStorage.setItem('token', data.token);
         localStorage.setItem('auth_token', data.token);
 
         if (data.email) {
@@ -221,6 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserPicture(null);
         setUserName(null);
         setUserEmail(null);
+        localStorage.removeItem('token');
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_picture');
         localStorage.removeItem('user_name');

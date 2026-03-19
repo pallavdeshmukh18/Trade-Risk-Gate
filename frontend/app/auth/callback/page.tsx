@@ -5,41 +5,8 @@ import Link from "next/link";
 
 export default function AuthCallbackPage() {
     useEffect(() => {
-        const searchParams = new URLSearchParams(window.location.search);
-        const error = searchParams.get("error");
-
-        if (error) {
-            window.location.replace(`/login?error=${encodeURIComponent(error)}`);
-            return;
-        }
-
-        const token = searchParams.get("token");
-        const name = searchParams.get("name");
-        const email = searchParams.get("email");
-        const picture = searchParams.get("picture");
-
-        if (!token) {
-            window.location.replace("/login?error=Google%20login%20failed");
-            return;
-        }
-
-        localStorage.setItem("auth_token", token);
-
-        if (name) {
-            localStorage.setItem("user_name", name);
-        }
-
-        if (email) {
-            localStorage.setItem("user_email", email);
-        }
-
-        if (picture) {
-            localStorage.setItem("user_picture", picture);
-        } else {
-            localStorage.removeItem("user_picture");
-        }
-
-        window.location.replace("/dashboard");
+        const search = window.location.search;
+        window.location.replace(`/auth/success${search}`);
     }, []);
 
     return (

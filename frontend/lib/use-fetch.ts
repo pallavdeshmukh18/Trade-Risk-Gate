@@ -12,6 +12,8 @@ export function useFetch() {
         endpoint: string,
         options: FetchOptions = {}
     ) => {
+        const authToken = token || localStorage.getItem('token') || localStorage.getItem('auth_token');
+
         if (!apiUrl) {
             throw new Error('API unavailable. Set NEXT_PUBLIC_API_URL for production.');
         }
@@ -21,8 +23,8 @@ export function useFetch() {
             ...options.headers,
         };
 
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
+        if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
         }
 
         const response = await fetch(`${apiUrl}${endpoint}`, {

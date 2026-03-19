@@ -41,6 +41,43 @@ function getBackendUrl() {
     return process.env.BACKEND_URL.replace(/\/$/, "");
 }
 
+async function findOrCreateGoogleUser(payload) {
+    if (!payload?.email || !payload.email_verified) {
+        throw new Error("Google account could not be verified");
+    }
+
+    const normalizedEmail = normalizeEmail(payload.email);
+    let user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+        user = await User.create({
+            name: payload.name || normalizedEmail.split("@")[0],
+            email: normalizedEmail,
+            googleId: payload.sub,
+            avatarUrl: payload.picture,
+            authProvider: "google",
+            role: "TRADER"
+        });
+
+        return user;
+    }
+
+    if (user.googleId && user.googleId !== payload.sub) {
+        throw new Error("This email is linked to a different Google account");
+    }
+
+    user.name = user.name || payload.name || user.name;
+    user.googleId = user.googleId || payload.sub;
+    user.avatarUrl = payload.picture || user.avatarUrl;
+
+    if (!user.passwordHash) {
+        user.authProvider = "google";
+    }
+
+    await user.save();
+    return user;
+}
+
 router.post("/login", async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -125,7 +162,43 @@ router.get("/google/callback", async (req, res) => {
         return res.redirect(`${getFrontendUrl()}/login?error=Missing%20Google%20auth%20code`);
     }
 
-    return res.redirect(`${getFrontendUrl()}/dashboard`);
+    if (!process.env.GOOGLE_CLIENT_SECRET) {
+        return res.redirect(`${getFrontendUrl()}/login?error=Google%20OAuth%20is%20not%20configured`);
+    }
+
+    try {
+        const oauthClient = new OAuth2Client(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            `${getBackendUrl()}/auth/google/callback`
+        );
+
+        const { tokens } = await oauthClient.getToken(code);
+
+        if (!tokens.id_token) {
+            return res.redirect(`${getFrontendUrl()}/login?error=Google%20sign-in%20failed`);
+        }
+
+        const ticket = await oauthClient.verifyIdToken({
+            idToken: tokens.id_token,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+
+        const payload = ticket.getPayload();
+        const user = await findOrCreateGoogleUser(payload);
+        const authResponse = buildAuthResponse(user);
+        const redirectParams = new URLSearchParams({
+            token: authResponse.token,
+            name: authResponse.name || "",
+            email: authResponse.email || "",
+            picture: authResponse.picture || "",
+        });
+
+        return res.redirect(`${getFrontendUrl()}/auth/success?${redirectParams.toString()}`);
+    } catch (error) {
+        console.error("Google callback error:", error);
+        return res.redirect(`${getFrontendUrl()}/login?error=Google%20sign-in%20failed`);
+    }
 });
 
 router.post("/google", async (req, res) => {
@@ -146,37 +219,7 @@ router.post("/google", async (req, res) => {
         });
 
         const payload = ticket.getPayload();
-        if (!payload?.email || !payload.email_verified) {
-            return res.status(401).json({ error: "Google account could not be verified" });
-        }
-
-        const normalizedEmail = normalizeEmail(payload.email);
-        let user = await User.findOne({ email: normalizedEmail });
-
-        if (!user) {
-            user = await User.create({
-                name: payload.name || normalizedEmail.split("@")[0],
-                email: normalizedEmail,
-                googleId: payload.sub,
-                avatarUrl: payload.picture,
-                authProvider: "google",
-                role: "TRADER"
-            });
-        } else {
-            if (user.googleId && user.googleId !== payload.sub) {
-                return res.status(409).json({ error: "This email is linked to a different Google account" });
-            }
-
-            user.name = user.name || payload.name || user.name;
-            user.googleId = user.googleId || payload.sub;
-            user.avatarUrl = payload.picture || user.avatarUrl;
-
-            if (!user.passwordHash) {
-                user.authProvider = "google";
-            }
-
-            await user.save();
-        }
+        const user = await findOrCreateGoogleUser(payload);
 
         res.json(buildAuthResponse(user));
     } catch (error) {
