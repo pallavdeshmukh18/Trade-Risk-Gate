@@ -39,6 +39,10 @@ if (!process.env.ML_BASE_URL) {
   throw new Error("ML_BASE_URL missing");
 }
 
+if (!process.env.BACKEND_URL) {
+  throw new Error("BACKEND_URL missing");
+}
+
 const app = express();
 const PORT = process.env.PORT || 8000;
 const allowedOrigins = [

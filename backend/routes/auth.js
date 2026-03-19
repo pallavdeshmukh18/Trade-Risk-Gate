@@ -38,7 +38,7 @@ function getFrontendUrl() {
 }
 
 function getBackendUrl() {
-    return (process.env.BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
+    return process.env.BACKEND_URL.replace(/\/$/, "");
 }
 
 router.post("/login", async (req, res) => {
@@ -101,6 +101,10 @@ router.post("/register", async (req, res) => {
 router.get("/google", (req, res) => {
     if (!process.env.GOOGLE_CLIENT_ID) {
         return res.status(500).send("Google OAuth is not configured");
+    }
+
+    if (!process.env.BACKEND_URL) {
+        return res.status(500).send("BACKEND_URL is not configured");
     }
 
     const params = new URLSearchParams({
