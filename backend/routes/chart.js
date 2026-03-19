@@ -1,8 +1,19 @@
 import express from "express";
-import redis from "../services/redisClient.js";
+import { safeRedisGet } from "../services/redisClient.js";
 import { fetchStockDataOnDemand } from "../services/yahooFeed.js";
 
 const router = express.Router();
+
+function parseCandles(raw) {
+    if (!raw) return [];
+
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
 
 async function handleChartRequest(req, res) {
     const { symbol, range = "1D" } = req.query;
@@ -22,23 +33,25 @@ async function handleChartRequest(req, res) {
             ? (isIntraday ? `ohlcv_intraday:${fallbackSymbol}` : `ohlcv:${fallbackSymbol}`)
             : null;
 
-        let ohlcvStr = await redis.get(primaryOhlcvKey);
+        let ohlcvStr = await safeRedisGet(primaryOhlcvKey);
         if (!ohlcvStr && fallbackOhlcvKey) {
-            ohlcvStr = await redis.get(fallbackOhlcvKey);
+            ohlcvStr = await safeRedisGet(fallbackOhlcvKey);
         }
 
-        let price = await redis.get(`live_price:${primarySymbol}`);
+        let price = await safeRedisGet(`live_price:${primarySymbol}`);
         if (!price && fallbackSymbol) {
-            price = await redis.get(`live_price:${fallbackSymbol}`);
+            price = await safeRedisGet(`live_price:${fallbackSymbol}`);
         }
 
-        let volatility = await redis.get(`volatility:${primarySymbol}`);
+        let volatility = await safeRedisGet(`volatility:${primarySymbol}`);
         if (!volatility && fallbackSymbol) {
-            volatility = await redis.get(`volatility:${fallbackSymbol}`);
+            volatility = await safeRedisGet(`volatility:${fallbackSymbol}`);
         }
 
-        // If no data found in cache, fetch on-demand
-        if (!ohlcvStr) {
+        let ohlcv = parseCandles(ohlcvStr);
+
+        // If no usable data found in cache, fetch on-demand and return the fresh payload directly.
+        if (ohlcv.length === 0) {
             console.log(`No cached data for ${rawSymbol}, fetching on-demand...`);
             console.log("Fetching chart for:", ticker);
             const fetchResult = await fetchStockDataOnDemand(ticker);
@@ -49,30 +62,33 @@ async function handleChartRequest(req, res) {
                 });
             }
 
-            // Try to get the data again after fetching
-            ohlcvStr = await redis.get(primaryOhlcvKey);
-            if (!ohlcvStr && fallbackOhlcvKey) {
-                ohlcvStr = await redis.get(fallbackOhlcvKey);
-            }
-            if (!ohlcvStr) {
-                // Fallback to daily data if intraday not available
-                if (isIntraday) {
-                    ohlcvStr = await redis.get(`ohlcv:${primarySymbol}`);
+            const fetchedCandles = isIntraday
+                ? (fetchResult.intradayCandles?.length ? fetchResult.intradayCandles : fetchResult.candles)
+                : fetchResult.candles;
+
+            if (Array.isArray(fetchedCandles) && fetchedCandles.length > 0) {
+                ohlcv = fetchedCandles;
+                if (!price) {
+                    price = fetchedCandles[fetchedCandles.length - 1]?.close ?? null;
+                }
+            } else {
+                // If cache writes succeeded, try the cache once more before giving up.
+                ohlcvStr = await safeRedisGet(primaryOhlcvKey);
+                if (!ohlcvStr && fallbackOhlcvKey) {
+                    ohlcvStr = await safeRedisGet(fallbackOhlcvKey);
+                }
+                if (!ohlcvStr && isIntraday) {
+                    ohlcvStr = await safeRedisGet(`ohlcv:${primarySymbol}`);
                     if (!ohlcvStr && fallbackSymbol) {
-                        ohlcvStr = await redis.get(`ohlcv:${fallbackSymbol}`);
+                        ohlcvStr = await safeRedisGet(`ohlcv:${fallbackSymbol}`);
                     }
                 }
+                ohlcv = parseCandles(ohlcvStr);
             }
         }
 
-        if (!ohlcvStr) {
+        if (ohlcv.length === 0) {
             return res.status(404).json({ error: `No data found for ${rawSymbol}` });
-        }
-
-        let ohlcv = JSON.parse(ohlcvStr);
-
-        if (!Array.isArray(ohlcv) || ohlcv.length === 0) {
-            return res.json({ candles: [] });
         }
 
         // Filter data based on time range
@@ -122,6 +138,10 @@ async function handleChartRequest(req, res) {
         }
 
         const candles = filteredCandles.length > 0 ? filteredCandles : ohlcv;
+
+        console.log(
+            `Returning ${candles.length} candles for ${rawSymbol} (${ticker}) range=${range} source=${isIntraday ? "intraday" : "daily"}`
+        );
 
         res.json({
             symbol: rawSymbol,

@@ -140,6 +140,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
     const [candles, setCandles] = useState<Candle[]>([]);
     const [price, setPrice] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [chartError, setChartError] = useState<string | null>(null);
     const [chartType, setChartType] = useState<ChartType>("candlestick");
     const [timeRange, setTimeRange] = useState<TimeRange>("1D");
     const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -151,9 +152,17 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
 
         const fetchChartData = async () => {
             setIsLoading(true);
+            setChartError(null);
             try {
                 const response = await fetch(`/api/ml/chart?symbol=${formattedSymbol}&range=${timeRange}`);
                 const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        typeof data?.error === "string" ? data.error : "Failed to load chart data"
+                    );
+                }
+
                 const nextCandles = Array.isArray(data.candles) ? data.candles : [];
                 setCandles(nextCandles);
                 setPrice(data.price ?? null);
@@ -161,6 +170,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                 console.error("Failed to fetch chart data:", err);
                 setCandles([]);
                 setPrice(null);
+                setChartError(err instanceof Error ? err.message : "Failed to load chart data");
             } finally {
                 setIsLoading(false);
             }
@@ -652,6 +662,10 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                                 ref={chartContainerRef}
                                 style={{ width: "100%", height: "100%", display: "block" }}
                             />
+                        ) : chartError ? (
+                            <div className="w-full h-full flex items-center justify-center text-rose-300/90">
+                                {chartError}
+                            </div>
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-white/50">
                                 No data available
