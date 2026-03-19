@@ -41,16 +41,19 @@ if (!process.env.ML_BASE_URL) {
 
 const app = express();
 const PORT = process.env.PORT || 8000;
-const allowedOrigins = ["http://localhost:3000", process.env.FRONTEND_URL].filter(Boolean);
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://trade-risk-gate.vercel.app",
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+const corsOptions = {
+  origin: allowedOrigins,
+  credentials: true,
+};
 
 app.use(express.json());
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
-);
-app.options("*", cors());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use("/api", predictRoutes);
 app.use("/api", tradeImpactRoutes);
