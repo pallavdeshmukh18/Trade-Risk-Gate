@@ -14,7 +14,7 @@ interface AuthContextType {
     userName: string | null;
     userEmail: string | null;
     login: (email: string, password: string) => Promise<void>;
-    loginWithGoogle: (credential: string) => Promise<void>;
+    loginWithGoogle: () => Promise<void>;
     signup: (email: string, password: string, name?: string) => Promise<void>;
     logout: () => void;
     isLoading: boolean;
@@ -162,40 +162,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const loginWithGoogle = async (credential: string) => {
+    const loginWithGoogle = async () => {
         setIsLoading(true);
         setError(null);
         try {
             if (!apiUrl) {
                 throw new Error('API unavailable. Set NEXT_PUBLIC_API_URL for production.');
             }
-
-            const response = await fetch(`${apiUrl}/auth/google`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ credential }),
-            });
-
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Google login failed');
-            }
-
-            const data = await response.json();
-            persistAuthState({
-                token: data.token,
-                email: data.email,
-                name: data.name,
-                picture: data.picture || null,
-            });
+            window.location.href = `${apiUrl}/auth/google`;
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Google login failed';
             setError(errorMessage);
             throw err;
-        } finally {
-            setIsLoading(false);
         }
     };
 

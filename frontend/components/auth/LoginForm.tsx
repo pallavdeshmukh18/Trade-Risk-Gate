@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 
@@ -15,6 +15,12 @@ export default function LoginForm() {
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
+    const [redirectError, setRedirectError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        setRedirectError(params.get("error"));
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -33,13 +39,12 @@ export default function LoginForm() {
         }
     };
 
-    const displayError = localError || error;
+    const displayError = localError || redirectError || error;
 
-    const handleGoogleLogin = async (credential: string) => {
+    const handleGoogleLogin = async () => {
         setLocalError(null);
         try {
-            await loginWithGoogle(credential);
-            router.push("/dashboard");
+            await loginWithGoogle();
         } catch (err) {
             setLocalError(err instanceof Error ? err.message : "Google login failed");
         }

@@ -47,11 +47,10 @@ export default function SignupForm() {
 
     const displayError = localError || error;
 
-    const handleGoogleSignup = async (credential: string) => {
+    const handleGoogleSignup = async () => {
         setLocalError(null);
         try {
-            await loginWithGoogle(credential);
-            router.push("/dashboard");
+            await loginWithGoogle();
         } catch (err) {
             setLocalError(err instanceof Error ? err.message : "Google sign-up failed");
         }
