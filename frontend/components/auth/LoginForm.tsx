@@ -2,13 +2,15 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 
 export default function LoginForm() {
     const router = useRouter();
-    const { login, isLoading, error } = useAuth();
+    const { login, loginWithGoogle, isLoading, error } = useAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -33,13 +35,37 @@ export default function LoginForm() {
 
     const displayError = localError || error;
 
+    const handleGoogleLogin = async (credential: string) => {
+        setLocalError(null);
+        try {
+            await loginWithGoogle(credential);
+            router.push("/dashboard");
+        } catch (err) {
+            setLocalError(err instanceof Error ? err.message : "Google login failed");
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="bg-[#14141A]/90 backdrop-blur-xl p-8 rounded-2xl border border-white/10 shadow-2xl w-full max-w-md"
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#14141A]/90 p-8 text-center shadow-2xl backdrop-blur-xl"
         >
+            <div className="mb-6 flex flex-col items-center gap-3">
+                <Image
+                    src="/logo.svg"
+                    alt="LowkeyLoss logo"
+                    width={36}
+                    height={36}
+                    className="h-9 w-9"
+                />
+                <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-white/40">LowkeyLoss</p>
+                    <p className="text-sm text-gray-400">Trade intelligence, lowkey.</p>
+                </div>
+            </div>
+
             <h1 className="text-3xl font-semibold text-white mb-2">
                 Log in
             </h1>
@@ -60,7 +86,7 @@ export default function LoginForm() {
                 </div>
             )}
 
-            <form className="space-y-4" onSubmit={handleSubmit}>
+            <form className="space-y-4 text-left" onSubmit={handleSubmit}>
                 {/* Email */}
                 <input
                     type="email"
@@ -92,7 +118,7 @@ export default function LoginForm() {
                 </div>
 
                 {/* Forgot password */}
-                <div className="flex justify-end">
+                <div className="flex justify-center">
                     <Link
                         href="/forgot-password"
                         className="text-sm text-gray-400 hover:text-gray-200 hover:underline"
@@ -112,21 +138,17 @@ export default function LoginForm() {
             </form>
 
             {/* Divider */}
-            <div className="flex items-center gap-4 my-6">
+            <div className="my-6 flex items-center gap-4">
                 <div className="h-px bg-white/10 flex-1" />
                 <span className="text-sm text-gray-500">Or continue with</span>
                 <div className="h-px bg-white/10 flex-1" />
             </div>
 
-            {/* Google */}
-            <button className="w-full flex items-center justify-center gap-3 rounded-lg border border-white/10 py-3 text-white hover:bg-white/5 transition">
-                <img
-                    src="https://www.svgrepo.com/show/475656/google-color.svg"
-                    alt="Google"
-                    className="w-5 h-5"
-                />
-                Continue with Google
-            </button>
+            <GoogleSignInButton
+                text="signin_with"
+                disabled={isLoading}
+                onCredential={handleGoogleLogin}
+            />
         </motion.div>
     );
 }

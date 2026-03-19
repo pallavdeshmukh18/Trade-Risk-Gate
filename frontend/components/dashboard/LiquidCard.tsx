@@ -34,14 +34,8 @@ export default function LiquidCard({ children, className }: Props) {
         ${className}
       `}
         >
-
-            {/* Liquid highlight */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_var(--x)_var(--y),rgba(255,255,255,0.18),transparent_45%)] opacity-60" />
-
-            {/* Edge glow */}
             <div className="absolute inset-0 rounded-[22px] ring-1 ring-white/10" />
-
-            {/* Content */}
             <div className="relative z-10">{children}</div>
         </motion.div>
     );

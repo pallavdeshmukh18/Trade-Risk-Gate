@@ -1,8 +1,10 @@
+import { dirname, join } from "path";
 import express from "express";
 import marketRoutes from "./routes/market.js";
 import healthCheckRoute from "./routes/healthcheck.js";
 import mongoose, { get } from "mongoose";
 import dotenv from "dotenv";
+import { fileURLToPath } from "url";
 import { startYahooFeed } from "./services/yahooFeed.js";
 import tradeRoute from "./routes/place_trade.js";
 import portfolioRoutes from "./routes/portfolio.js";
@@ -14,10 +16,18 @@ import authRoutes from "./routes/auth.js";
 import getOrder from './routes/getOrders.js';
 import pnlRoutes from './routes/pnl.js';
 
+import mlTestRoutes from "./routes/mlTest.js";
+import riskRoutes from "./routes/risk.js";
+import tradeImpactRoutes from "./routes/tradeImpact.js";
+import predictRoutes from "./routes/predict.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+dotenv.config({ path: join(__dirname, ".env") });
 
 const app = express();
+
 app.use(express.json());
 
 // CORS middleware
@@ -35,6 +45,11 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+app.use("/api", predictRoutes);
+app.use("/api", tradeImpactRoutes);
+app.use("/api", riskRoutes);
+app.use("/api", mlTestRoutes);
 
 // PUBLIC ROUTES
 app.use("/auth", authRoutes);

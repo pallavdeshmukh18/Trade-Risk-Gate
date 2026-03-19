@@ -30,6 +30,18 @@ export default function WatchlistPage() {
         setIsChartOpen(true);
     };
 
+    const handleCloseChart = () => {
+        setIsChartOpen(false);
+        setSelectedSymbol(null);
+    };
+
+    const greeting = (() => {
+        const hour = now.getHours();
+        if (hour < 12) return "Good morning";
+        if (hour < 18) return "Good afternoon";
+        return "Good evening";
+    })();
+
     return (
         <ProtectedRoute>
             <div className="relative flex min-h-screen overflow-hidden bg-[#0A0C12]">
@@ -39,6 +51,7 @@ export default function WatchlistPage() {
                     <div className="absolute top-24 left-24 w-[520px] h-[520px] bg-indigo-600/12 blur-[150px]" />
                     <div className="absolute bottom-24 right-24 w-[520px] h-[520px] bg-purple-600/12 blur-[150px]" />
                     <div className="h-px w-full bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+                    <div className="absolute top-1/2 left-1/2 w-[360px] h-[360px] bg-cyan-500/8 blur-[170px] -translate-x-1/2 -translate-y-1/2" />
                 </div>
                 {/* 🧬 Subtle system grid */}
                 <div className="pointer-events-none fixed inset-0 -z-10 opacity-[0.035]">
@@ -80,10 +93,16 @@ export default function WatchlistPage() {
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div>
                             <h1 className="text-4xl md:text-5xl font-bold text-white/95 tracking-tight">
-                                Watchlist
+                                {greeting}{userName ? `, ${userName}` : ""}
                             </h1>
                             <div className="text-sm text-white/45 mt-2">
-                                Track your favorite assets in real-time.
+                                {now.toLocaleString("en-IN", {
+                                    weekday: "long",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                })}
                             </div>
                         </div>
                     </div>
@@ -104,7 +123,7 @@ export default function WatchlistPage() {
                     <ChartModal 
                         symbol={selectedSymbol}
                         isOpen={isChartOpen}
-                        onClose={() => setIsChartOpen(false)}
+                        onClose={handleCloseChart}
                         onTradeSuccess={() => {}}
                     />
                 )}

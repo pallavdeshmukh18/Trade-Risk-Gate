@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, Plus, Trash2, TrendingUp, TrendingDown, Activity, X } from "lucide-react";
+import { Search, Plus, Trash2, TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/lib/use-fetch";
 import { useAuth } from "@/lib/auth-context";
@@ -69,9 +69,7 @@ export default function Watchlist({ onSelectSymbol, isFullPage = false }: Watchl
         // Debounce search - wait 300ms after user stops typing
         searchTimeoutRef.current = setTimeout(async () => {
             try {
-                const response = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/search/stocks?q=${encodeURIComponent(search)}`
-                );
+                const response = await fetch(`/api/search/stocks?q=${encodeURIComponent(search)}`);
                 const data = await response.json();
 
                 // Filter out stocks already in watchlist
@@ -126,7 +124,6 @@ export default function Watchlist({ onSelectSymbol, isFullPage = false }: Watchl
 
         const saveWatchlist = async () => {
             try {
-                console.log('Saving watchlist:', stocks);
                 await fetchWithAuth('/watchlist', {
                     method: 'PUT',
                     headers: {
@@ -134,7 +131,6 @@ export default function Watchlist({ onSelectSymbol, isFullPage = false }: Watchl
                     },
                     body: JSON.stringify({ watchlist: stocks }),
                 });
-                console.log('Watchlist saved successfully');
             } catch (error) {
                 console.error('Failed to save watchlist:', error);
             }

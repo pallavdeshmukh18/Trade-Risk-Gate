@@ -6,12 +6,16 @@ interface FetchOptions extends RequestInit {
 
 export function useFetch() {
     const { token } = useAuth();
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
 
     const fetchWithAuth = async (
         endpoint: string,
         options: FetchOptions = {}
     ) => {
+        if (!apiUrl) {
+            throw new Error('API unavailable. Set NEXT_PUBLIC_API_URL for production.');
+        }
+
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             ...options.headers,

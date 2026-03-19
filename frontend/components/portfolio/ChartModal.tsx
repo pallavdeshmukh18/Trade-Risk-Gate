@@ -3,11 +3,12 @@
 import { useAuth } from "@/lib/auth-context";
 import { useFetch } from "@/lib/use-fetch";
 import { formatPrice, getCurrency } from "@/lib/currency-utils";
+import GlassCard from "@/components/ui/GlassCard";
 
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
-import { createChart, ColorType, IChartApi, CandlestickSeries, LineSeries, AreaSeries, BarSeries } from "lightweight-charts";
+import { useCallback, useEffect, useState, useRef } from "react";
+import { createChart, ColorType, IChartApi, CandlestickSeries, LineSeries, AreaSeries, BarSeries, UTCTimestamp } from "lightweight-charts";
 
 // Blocked symbols (international stocks)
 const BLOCKED_SYMBOLS = new Set([
@@ -32,12 +33,87 @@ type Candle = {
 type ChartType = "candlestick" | "line" | "area" | "bar";
 type TimeRange = "1D" | "5D" | "1W" | "1M" | "3M" | "6M" | "1Y" | "5Y";
 
+type PortfolioPosition = {
+    symbol: string;
+    quantity: number;
+    avgEntryPrice: number;
+    currentPrice: number;
+};
+
+type RiskPosition = {
+    symbol: string;
+    quantity: number;
+    prices: number[];
+};
+
+type TradeImpact = {
+    beforeRisk: number;
+    afterRisk: number;
+    delta: number;
+    warning: string;
+};
+
+type Prediction = {
+    lossProbability: number;
+    prediction: "HIGH_RISK" | "LOW_RISK";
+};
+
 type ChartModalProps = {
     symbol: string;
     isOpen: boolean;
     onClose: () => void;
     onTradeSuccess?: () => void;
 };
+
+function sanitizePrices(prices: number[]) {
+    return prices.filter((value) => Number.isFinite(value));
+}
+
+function buildRiskPositions(
+    positions: PortfolioPosition[],
+    selectedSymbol: string,
+    currentPrices: number[]
+): RiskPosition[] {
+    const selectedPrices = sanitizePrices(currentPrices);
+
+    return positions
+        .filter((pos) => pos.quantity > 0)
+        .map((pos) => {
+            const fallbackPrices = sanitizePrices([pos.avgEntryPrice, pos.currentPrice]);
+            return {
+                symbol: pos.symbol,
+                quantity: pos.quantity,
+                prices: pos.symbol === selectedSymbol && selectedPrices.length >= 2
+                    ? selectedPrices
+                    : fallbackPrices,
+            };
+        })
+        .filter((pos) => pos.prices.length >= 2);
+}
+
+function buildProjectedPositions(
+    positions: RiskPosition[],
+    trade: { symbol: string; quantity: number; prices: number[] }
+) {
+    const sanitizedTradePrices = sanitizePrices(trade.prices);
+    const projected = positions.map((pos) => ({ ...pos, prices: [...pos.prices] }));
+    const existing = projected.find((pos) => pos.symbol === trade.symbol);
+
+    if (existing) {
+        existing.quantity += trade.quantity;
+        if (sanitizedTradePrices.length >= 2) {
+            existing.prices = sanitizedTradePrices;
+        }
+    } else if (sanitizedTradePrices.length >= 2) {
+        projected.push({
+            symbol: trade.symbol,
+            quantity: trade.quantity,
+            prices: sanitizedTradePrices,
+        });
+    }
+
+    return projected.filter((pos) => pos.quantity > 0 && pos.prices.length >= 2);
+}
 
 export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: ChartModalProps) {
     const { token } = useAuth();
@@ -47,9 +123,15 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
     const isBlockedSymbol = isBlocked(symbol);
 
     // Trade State
-    const [quantity, setQuantity] = useState<number>(1);
+    const [positions, setPositions] = useState<PortfolioPosition[]>([]);
+    const [quantity, setQuantity] = useState<number>(0);
     const [isTrading, setIsTrading] = useState(false);
     const [tradeError, setTradeError] = useState<string | null>(null);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const [predictionError, setPredictionError] = useState<string | null>(null);
+    const [impact, setImpact] = useState<TradeImpact | null>(null);
+    const [prediction, setPrediction] = useState<Prediction | null>(null);
+    const [loading, setLoading] = useState(false);
     const [candles, setCandles] = useState<Candle[]>([]);
     const [price, setPrice] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -64,12 +146,8 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
         const fetchChartData = async () => {
             setIsLoading(true);
             try {
-                console.log(`Fetching data for ${symbol} with range ${timeRange}`);
-                const response = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/chart/data?symbol=${symbol}&range=${timeRange}`
-                );
+                const response = await fetch(`/api/ml/chart?symbol=${symbol}&range=${timeRange}`);
                 const data = await response.json();
-                console.log(`Received ${data.candles?.length || 0} candles for ${timeRange}`, data);
                 setCandles(data.candles || []);
                 setPrice(data.price);
             } catch (err) {
@@ -82,6 +160,23 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
         fetchChartData();
     }, [symbol, isOpen, timeRange, isBlockedSymbol]);
 
+    useEffect(() => {
+        if (!isOpen || !token) return;
+
+        const loadPositions = async () => {
+            try {
+                const portfolioPositions = await fetchWithAuth("/portfolio/positions");
+                setPositions(Array.isArray(portfolioPositions) ? portfolioPositions : []);
+            } catch (err) {
+                console.error("Failed to fetch positions for trade analysis:", err);
+                setPositions([]);
+            }
+        };
+
+        loadPositions();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, token]);
+
     // Initialize and update chart
     useEffect(() => {
         if (!chartContainerRef.current || candles.length === 0) return;
@@ -89,8 +184,6 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
         // Use a small delay to ensure DOM is fully rendered
         const timer = setTimeout(() => {
             try {
-                console.log(`Initializing ${chartType} chart with ${candles.length} candles`);
-
                 // Clean up old chart
                 if (chartRef.current) {
                     chartRef.current.remove();
@@ -105,10 +198,8 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                 const width = rect.width > 0 ? rect.width : 800;
                 const height = rect.height > 0 ? rect.height : 500;
 
-                console.log(`Chart container dimensions: ${width}x${height}`);
-
                 // Create new chart with explicit type checking
-                let chart: any;
+                let chart: IChartApi;
                 try {
                     chart = createChart(container, {
                         layout: {
@@ -131,24 +222,18 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                         grid: {
                             hLineColor: "#ffffff0d",
                             vLineColor: "#ffffff0d",
-                        } as any,
+                        },
                     });
                 } catch (createError) {
                     console.error("Error creating chart instance:", createError);
                     return;
                 }
 
-                if (!chart) {
-                    console.error("Chart instance is null/undefined");
-                    return;
-                }
-
-                console.log("Chart created successfully");
                 chartRef.current = chart;
 
                 // Format candles for the chart
                 const formattedCandles = candles.map((c) => ({
-                    time: Math.floor(c.time / 1000) as any,
+                    time: Math.floor(c.time / 1000) as UTCTimestamp,
                     open: c.open,
                     high: c.high,
                     low: c.low,
@@ -158,7 +243,6 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                 // Add appropriate series based on chart type
                 try {
                     if (chartType === "candlestick") {
-                        console.log("Adding candlestick series");
                         const candleStickSeries = chart.addSeries(CandlestickSeries, {
                             upColor: "#10b981",
                             downColor: "#ef4444",
@@ -169,9 +253,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
 
                         candleStickSeries.setData(formattedCandles);
                         chart.timeScale().fitContent();
-                        console.log("Candlestick series added successfully");
                     } else if (chartType === "bar") {
-                        console.log("Adding bar series");
                         const barSeries = chart.addSeries(BarSeries, {
                             upColor: "#10b981",
                             downColor: "#ef4444",
@@ -179,9 +261,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
 
                         barSeries.setData(formattedCandles);
                         chart.timeScale().fitContent();
-                        console.log("Bar series added successfully");
                     } else if (chartType === "line") {
-                        console.log("Adding line series");
                         const lineSeries = chart.addSeries(LineSeries, {
                             color: "#3b82f6",
                             lineWidth: 2,
@@ -194,9 +274,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
 
                         lineSeries.setData(lineCandles);
                         chart.timeScale().fitContent();
-                        console.log("Line series added successfully");
                     } else if (chartType === "area") {
-                        console.log("Adding area series");
                         const areaSeries = chart.addSeries(AreaSeries, {
                             lineColor: "#10b981",
                             topColor: "#10b98133",
@@ -211,7 +289,6 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
 
                         areaSeries.setData(areaCandles);
                         chart.timeScale().fitContent();
-                        console.log("Area series added successfully");
                     }
                 } catch (seriesError) {
                     console.error("Error adding series:", seriesError);
@@ -241,7 +318,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
     }, [candles, chartType]);
 
     const handleTrade = async (side: "BUY" | "SELL") => {
-        if (!price) return;
+        if (!price || quantity < 1) return;
         setIsTrading(true);
         setTradeError(null);
 
@@ -265,6 +342,109 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
         }
     };
 
+    const analyzeTrade = useCallback(async (qty: number, signal: AbortSignal) => {
+        const currentPrices = sanitizePrices(candles.map((c) => c.close));
+
+        if (!isOpen || !symbol || qty < 1 || currentPrices.length < 2) {
+            setLoading(false);
+            return;
+        }
+
+        const normalizedPositions = buildRiskPositions(positions, symbol, currentPrices);
+        const trade = {
+            symbol,
+            quantity: qty,
+            prices: currentPrices,
+        };
+        const projectedPositions = buildProjectedPositions(normalizedPositions, trade);
+
+        if (projectedPositions.length === 0) {
+            setLoading(false);
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setAnalysisError(null);
+            setPredictionError(null);
+
+            const [impactRes, predRes] = await Promise.all([
+                fetch(`/api/ml/trade-impact`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        positions: normalizedPositions,
+                        trade,
+                    }),
+                    signal,
+                }),
+                fetch(`/api/ml/predict-risk`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        positions: projectedPositions,
+                    }),
+                    signal,
+                }),
+            ]);
+
+            const [impactData, predData] = await Promise.all([
+                impactRes.json().catch(() => ({})),
+                predRes.json().catch(() => ({})),
+            ]);
+
+            if (!impactRes.ok) {
+                throw new Error(
+                    typeof impactData?.error === "string"
+                        ? impactData.error
+                        : "Trade impact analysis failed"
+                );
+            }
+
+            setImpact(impactData);
+
+            if (!predRes.ok) {
+                setPredictionError(
+                    typeof predData?.error === "string"
+                        ? predData.error
+                        : "Prediction unavailable"
+                );
+                return;
+            }
+
+            setPrediction(predData);
+            setPredictionError(null);
+        } catch (err) {
+            if (err instanceof Error && err.name === "AbortError") {
+                return;
+            }
+
+            console.error("Trade analysis failed:", err);
+            setAnalysisError(err instanceof Error ? err.message : "Trade analysis failed");
+            setPredictionError(null);
+        } finally {
+            setLoading(false);
+        }
+    }, [candles, isOpen, positions, symbol]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (!quantity || quantity <= 0) {
+            setLoading(false);
+            return;
+        }
+
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => {
+            void analyzeTrade(quantity, controller.signal);
+        }, 500);
+
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [analyzeTrade, isOpen, quantity]);
+
     // Listen for Escape key
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
@@ -278,9 +458,15 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
         if (isOpen) {
             document.body.style.overflow = "hidden"; // Lock background scroll
             setTradeError(null);
-            setQuantity(1);
+            setAnalysisError(null);
+            setPredictionError(null);
+            setQuantity(0);
         } else {
             document.body.style.overflow = "unset"; // Unlock
+            setImpact(null);
+            setPrediction(null);
+            setPredictionError(null);
+            setLoading(false);
         }
         return () => {
             document.body.style.overflow = "unset";
@@ -303,34 +489,36 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.9, opacity: 0 }}
-                    className="bg-[#14161F] rounded-xl border border-white/10 shadow-2xl p-8 max-w-md w-full flex flex-col gap-6"
+                    className="max-w-md w-full"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white">Market Restriction</h2>
+                    <GlassCard innerClassName="space-y-6 p-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-white text-lg font-semibold">Market Restriction</h2>
+                            <button
+                                onClick={onClose}
+                                className="text-white/60 hover:text-white transition"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <p className="text-white/80">
+                                <span className="text-lg font-bold text-rose-400">{symbol}</span> is not available in the Indian market.
+                            </p>
+                            <p className="text-gray-400 text-sm">
+                                LowkeyLoss is restricted to NSE/BSE stocks only. Only Indian market symbols are supported.
+                            </p>
+                        </div>
+
                         <button
                             onClick={onClose}
-                            className="text-white/60 hover:text-white transition"
+                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 rounded transition text-sm"
                         >
-                            <X size={24} />
+                            Close
                         </button>
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                        <p className="text-white/80">
-                            <span className="text-lg font-bold text-rose-400">{symbol}</span> is not available in the Indian market.
-                        </p>
-                        <p className="text-white/60 text-sm">
-                            Trade-Risk-Gate is restricted to NSE/BSE stocks only. Only Indian market symbols are supported.
-                        </p>
-                    </div>
-
-                    <button
-                        onClick={onClose}
-                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 rounded transition text-sm"
-                    >
-                        Close
-                    </button>
+                    </GlassCard>
                 </motion.div>
             </motion.div>
         );
@@ -357,9 +545,10 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-[#14161F] w-full max-w-7xl rounded-xl border border-white/10 shadow-2xl overflow-hidden flex flex-col max-h-[95vh]"
+                className="w-full max-w-7xl"
                 onClick={(e) => e.stopPropagation()}
             >
+                <GlassCard innerClassName="overflow-hidden p-0 flex flex-col max-h-[95vh]">
                 {/* Fixed Header */}
                 <div className="border-b border-white/10 bg-white/[0.02]">
                     {/* Top Title Bar */}
@@ -482,7 +671,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                         {/* Scrollable Trading Panel */}
                         <div className="flex-1 overflow-y-auto no-scrollbar">
                             {/* Trading Form */}
-                            <div className="p-4 space-y-4 border-b border-white/5">
+                            <div className="p-8 space-y-6 border-b border-white/5 opacity-0 animate-fadeInUp transition-all duration-300 ease-out">
                                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">Trade</h3>
 
                                 <div>
@@ -493,14 +682,103 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                                         type="number"
                                         min="1"
                                         value={quantity}
-                                        onChange={(e) => setQuantity(Number(e.target.value))}
-                                        className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-emerald-500 transition text-sm"
+                                        onChange={(e) => {
+                                            setQuantity(Number(e.target.value));
+                                        }}
+                                        className="w-full rounded border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition-all duration-300 ease-out focus:border-emerald-500 focus:outline-none"
                                     />
                                 </div>
 
+                                {loading && (
+                                    <div className="mt-3 text-sm text-gray-400 animate-pulse transition-all duration-300 ease-out">
+                                        analyzing trade...
+                                    </div>
+                                )}
+
+                                {analysisError && (
+                                    <p className="text-rose-400 text-xs font-medium bg-rose-500/10 border border-rose-500/30 rounded px-3 py-2">
+                                        {analysisError}
+                                    </p>
+                                )}
+
+                                {predictionError && (
+                                    <p className="text-amber-300 text-xs font-medium bg-amber-500/10 border border-amber-500/30 rounded px-3 py-2">
+                                        {predictionError}
+                                    </p>
+                                )}
+
+                                {impact && (
+                                    <GlassCard
+                                        className="mt-4 opacity-0 animate-fadeInUp transition-all duration-300 ease-out"
+                                        innerClassName={`space-y-3 p-6 transition-all duration-300 ease-out ${impact.delta > 0 ? "shadow-2xl shadow-red-500/20" : "shadow-2xl shadow-green-500/20"}`}
+                                    >
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <p className="text-gray-400 text-sm">Risk Change</p>
+                                                    <p className={`text-white text-lg font-bold ${impact.delta > 0 ? "text-red-400" : "text-green-400"}`}>
+                                                        {impact.delta > 0 ? "+" : ""}
+                                                        {impact.delta.toFixed(2)}
+                                                    </p>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                                    <div>
+                                                        <p className="text-gray-400 text-sm">Before</p>
+                                                        <p className="text-white text-lg font-bold">{impact.beforeRisk.toFixed(2)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-gray-400 text-sm">After</p>
+                                                        <p className="text-white text-lg font-bold">{impact.afterRisk.toFixed(2)}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-gray-400 text-sm">Risk Signal</p>
+                                                    <p className={`text-sm font-semibold ${impact.delta > 0 ? "text-red-400" : "text-green-400"}`}>
+                                                        {impact.warning}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                    </GlassCard>
+                                )}
+
+                                {prediction && (
+                                    <GlassCard
+                                        className="mt-3 opacity-0 animate-fadeInUp transition-all duration-300 ease-out"
+                                        innerClassName={`space-y-2 p-6 transition-all duration-300 ease-out ${prediction.prediction === "HIGH_RISK" ? "shadow-2xl shadow-red-500/20 animate-pulse" : "shadow-2xl shadow-green-500/20"}`}
+                                    >
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <p className="text-gray-400 text-sm">Loss Probability</p>
+                                                    <p className="text-white text-lg font-bold">
+                                                        {prediction.lossProbability.toFixed(2)}
+                                                    </p>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <p className={`text-3xl font-bold ${prediction.prediction === "HIGH_RISK" ? "text-red-400" : "text-green-400"}`}>
+                                                        {prediction.prediction === "HIGH_RISK"
+                                                            ? "⚠️ lowkeyloss"
+                                                            : "✅ safe trade"}
+                                                    </p>
+                                                    <p className={`text-sm font-semibold ${prediction.prediction === "HIGH_RISK" ? "text-red-400" : "text-green-400"}`}>
+                                                        {prediction.prediction === "HIGH_RISK" ? "Elevated downside signal detected" : "Model confidence supports this trade"}
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-gray-400 text-sm">ML Classification</p>
+                                                    <p className={`text-sm font-semibold ${prediction.prediction === "HIGH_RISK" ? "text-red-400" : "text-green-400"}`}>
+                                                        {prediction.prediction}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                    </GlassCard>
+                                )}
+
                                 <button
                                     onClick={() => handleTrade("BUY")}
-                                    disabled={isTrading || !price}
+                                    disabled={isTrading || !price || quantity < 1}
                                     className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded transition text-sm"
                                 >
                                     {isTrading ? "Processing..." : "BUY"}
@@ -508,7 +786,7 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
 
                                 <button
                                     onClick={() => handleTrade("SELL")}
-                                    disabled={isTrading || !price}
+                                    disabled={isTrading || !price || quantity < 1}
                                     className="w-full bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded transition text-sm"
                                 >
                                     {isTrading ? "Processing..." : "SELL"}
@@ -522,26 +800,27 @@ export default function ChartModal({ symbol, isOpen, onClose, onTradeSuccess }: 
                             </div>
 
                             {/* Additional Info Panels */}
-                            <div className="p-4 space-y-4">
-                                <div className="bg-white/[0.05] rounded p-3 border border-white/10">
-                                    <h4 className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Position Limits</h4>
+                            <div className="p-8 space-y-6 opacity-0 animate-fadeInUp transition-all duration-300 ease-out">
+                                <GlassCard className="animate-fadeInUp transition-all duration-300 ease-out" innerClassName="space-y-2 p-6">
+                                    <h4 className="text-white text-lg font-semibold">Position Limits</h4>
                                     <div className="text-xs space-y-1.5">
                                         <div className="flex justify-between"><span className="text-white/60">Max Qty</span><span className="text-white/90">100</span></div>
                                         <div className="flex justify-between"><span className="text-white/60">Min Order</span><span className="text-white/90">{getCurrency(symbol).symbol}500</span></div>
                                     </div>
-                                </div>
+                                </GlassCard>
 
-                                <div className="bg-white/[0.05] rounded p-3 border border-white/10">
-                                    <h4 className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Market Info</h4>
+                                <GlassCard className="animate-fadeInUp transition-all duration-300 ease-out" innerClassName="space-y-2 p-6">
+                                    <h4 className="text-white text-lg font-semibold">Market Info</h4>
                                     <div className="text-xs space-y-1.5">
                                         <div className="flex justify-between"><span className="text-white/60">Status</span><span className="text-emerald-400">Open</span></div>
                                         <div className="flex justify-between"><span className="text-white/60">52W High</span><span className="text-white/90">N/A</span></div>
                                     </div>
-                                </div>
+                                </GlassCard>
                             </div>
                         </div>
                     </div>
                 </div>
+                </GlassCard>
             </motion.div>
         </motion.div>
     );

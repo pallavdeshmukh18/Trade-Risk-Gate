@@ -2,13 +2,15 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 
 export default function SignupForm() {
     const router = useRouter();
-    const { signup, isLoading, error } = useAuth();
+    const { signup, loginWithGoogle, isLoading, error } = useAuth();
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -44,13 +46,38 @@ export default function SignupForm() {
     };
 
     const displayError = localError || error;
+
+    const handleGoogleSignup = async (credential: string) => {
+        setLocalError(null);
+        try {
+            await loginWithGoogle(credential);
+            router.push("/dashboard");
+        } catch (err) {
+            setLocalError(err instanceof Error ? err.message : "Google sign-up failed");
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="bg-[#14141A]/90 backdrop-blur-xl p-8 rounded-2xl border border-white/10 shadow-2xl w-full max-w-md"
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#14141A]/90 p-8 text-center shadow-2xl backdrop-blur-xl"
         >
+            <div className="mb-6 flex flex-col items-center gap-3">
+                <Image
+                    src="/logo.svg"
+                    alt="LowkeyLoss logo"
+                    width={36}
+                    height={36}
+                    className="h-9 w-9"
+                />
+                <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-white/40">LowkeyLoss</p>
+                    <p className="text-sm text-gray-400">Start trading with sharper risk context.</p>
+                </div>
+            </div>
+
             <h1 className="text-3xl font-semibold text-white mb-2">
                 Create an account
             </h1>
@@ -71,7 +98,7 @@ export default function SignupForm() {
                 </div>
             )}
 
-            <form className="space-y-4" onSubmit={handleSubmit}>
+            <form className="space-y-4 text-left" onSubmit={handleSubmit}>
                 {/* Name */}
                 <input
                     type="text"
@@ -113,7 +140,7 @@ export default function SignupForm() {
                 </div>
 
                 {/* Terms */}
-                <label className="flex items-center text-sm text-gray-400 gap-2">
+                <label className="flex items-center gap-2 text-sm text-gray-400">
                     <input
                         type="checkbox"
                         className="accent-white"
@@ -138,21 +165,17 @@ export default function SignupForm() {
             </form>
 
             {/* Divider */}
-            <div className="flex items-center gap-4 my-6">
+            <div className="my-6 flex items-center gap-4">
                 <div className="h-px bg-white/10 flex-1" />
                 <span className="text-sm text-gray-500">Or register with</span>
                 <div className="h-px bg-white/10 flex-1" />
             </div>
 
-            {/* Google */}
-            <button className="w-full flex items-center justify-center gap-3 rounded-lg border border-white/10 py-3 text-white hover:bg-white/5 transition">
-                <img
-                    src="https://www.svgrepo.com/show/475656/google-color.svg"
-                    alt="Google"
-                    className="w-5 h-5"
-                />
-                Continue with Google
-            </button>
+            <GoogleSignInButton
+                text="signup_with"
+                disabled={isLoading}
+                onCredential={handleGoogleSignup}
+            />
         </motion.div>
     );
 }

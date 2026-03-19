@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { Bell, Search, LogOut, User, ChevronDown } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useState, useRef, useEffect } from "react";
@@ -10,7 +11,7 @@ type TopBarProps = {
 };
 
 export default function TopBar({ title = "Risk Overview" }: TopBarProps) {
-    const { userName, userEmail, logout } = useAuth();
+    const { user, userName, userEmail, logout } = useAuth();
     const router = useRouter();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -40,15 +41,15 @@ export default function TopBar({ title = "Risk Overview" }: TopBarProps) {
             </h2>
 
             <div className="flex items-center gap-4">
-                <div className="flex items-center bg-white/5 px-3 py-2 rounded-lg text-white/60">
-                    <Search size={16} />
+                <div className="flex items-center rounded-lg border border-emerald-200/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.035))] px-3 py-2 text-white/60 transition-all duration-300 hover:border-emerald-200/20 hover:bg-emerald-300/5">
+                    <Search size={16} className="text-emerald-200/70" />
                     <input
-                        className="bg-transparent outline-none ml-2 text-sm w-40"
+                        className="ml-2 w-40 bg-transparent text-sm outline-none placeholder:text-white/35"
                         placeholder="Search"
                     />
                 </div>
 
-                <Bell size={18} className="text-white/60 cursor-pointer hover:text-white/80 transition" />
+                <Bell size={18} className="cursor-pointer text-white/60 transition hover:text-emerald-200" />
 
                 {/* Profile Dropdown */}
                 <div className="relative" ref={dropdownRef}>
@@ -56,9 +57,21 @@ export default function TopBar({ title = "Risk Overview" }: TopBarProps) {
                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                         className="flex items-center gap-2 cursor-pointer group"
                     >
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-semibold shadow-lg group-hover:shadow-indigo-500/50 transition-all duration-300">
-                            {initial}
-                        </div>
+                        {user?.picture ? (
+                            <div className="h-9 w-9 overflow-hidden rounded-full border border-emerald-200/15 shadow-lg transition-all duration-300 group-hover:shadow-emerald-300/20">
+                                <Image
+                                    src={user.picture}
+                                    alt="Profile"
+                                    width={36}
+                                    height={36}
+                                    className="h-full w-full object-cover"
+                                />
+                            </div>
+                        ) : (
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-300 to-teal-500 text-sm font-semibold text-[#05110D] shadow-lg transition-all duration-300 group-hover:shadow-emerald-300/30">
+                                {initial}
+                            </div>
+                        )}
                         <ChevronDown
                             size={14}
                             className={`text-white/60 transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""
@@ -74,14 +87,26 @@ export default function TopBar({ title = "Risk Overview" }: TopBarProps) {
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: -10, scale: 0.95 }}
                                 transition={{ duration: 0.15 }}
-                                className="absolute right-0 mt-3 w-64 bg-[#0E1018]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
+                                className="absolute right-0 z-50 mt-3 w-64 overflow-hidden rounded-xl border border-emerald-200/10 bg-[#0E1018]/95 shadow-2xl backdrop-blur-xl"
                             >
                                 {/* User Info Section */}
-                                <div className="px-4 py-3 border-b border-white/10">
+                                <div className="border-b border-emerald-200/10 px-4 py-3">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-semibold">
-                                            {initial}
-                                        </div>
+                                        {user?.picture ? (
+                                            <div className="h-10 w-10 overflow-hidden rounded-full border border-emerald-200/15">
+                                                <Image
+                                                    src={user.picture}
+                                                    alt="Profile"
+                                                    width={40}
+                                                    height={40}
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-300 to-teal-500 text-sm font-semibold text-[#05110D]">
+                                                {initial}
+                                            </div>
+                                        )}
                                         <div className="flex-1 min-w-0">
                                             <div className="text-sm font-medium text-white/90 truncate">
                                                 {userName || "User"}
@@ -100,7 +125,7 @@ export default function TopBar({ title = "Risk Overview" }: TopBarProps) {
                                             setIsDropdownOpen(false);
                                             // Add profile navigation here if needed
                                         }}
-                                        className="w-full px-4 py-2.5 flex items-center gap-3 text-white/70 hover:bg-white/5 hover:text-white/90 transition text-sm"
+                                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/70 transition hover:bg-emerald-300/5 hover:text-emerald-100"
                                     >
                                         <User size={16} />
                                         <span>Profile</span>
