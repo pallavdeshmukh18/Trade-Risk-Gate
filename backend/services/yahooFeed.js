@@ -81,8 +81,11 @@ function toYahooSymbol(symbol) {
  * Returns both daily and intraday data
  */
 export async function fetchStockDataOnDemand(symbol) {
+    const yahooSymbol = toYahooSymbol(symbol);
+    let candles = [];
+    let intradayCandles = [];
+
     try {
-        const yahooSymbol = toYahooSymbol(symbol);
         console.log(`On-demand fetch for ${symbol} (Yahoo: ${yahooSymbol})`);
 
         // Fetch daily data (5 years)
@@ -91,7 +94,7 @@ export async function fetchStockDataOnDemand(symbol) {
             interval: "1d",
         });
 
-        const candles = result.quotes
+        candles = result.quotes
             .map((q) => ({
                 time: q.date.getTime(),
                 open: q.open,
@@ -104,9 +107,18 @@ export async function fetchStockDataOnDemand(symbol) {
 
         console.log(`Fetched ${candles.length} daily candles for ${symbol}`);
 
+        if (candles.length === 0) {
+            return { success: false, error: `No daily candles found for ${symbol}` };
+        }
+
         // Store in cache
         await updateMarket(symbol, candles);
+    } catch (error) {
+        console.error(`Failed to fetch daily data for ${symbol}:`, error.message);
+        return { success: false, error: error.message };
+    }
 
+    try {
         // Fetch intraday data (5 days)
         const intradayResult = await yahoo.chart(yahooSymbol, {
             period1: getStartDateDays(5),
@@ -114,7 +126,7 @@ export async function fetchStockDataOnDemand(symbol) {
             interval: "5m",
         });
 
-        const intradayCandles = intradayResult.quotes
+        intradayCandles = intradayResult.quotes
             .map((q) => ({
                 time: q.date.getTime(),
                 open: q.open,
@@ -132,12 +144,16 @@ export async function fetchStockDataOnDemand(symbol) {
             updateVolatility: false,
             updatePrice: true,
         });
-
-        return { success: true, candles, intradayCandles };
     } catch (error) {
-        console.error(`Failed to fetch data for ${symbol}:`, error.message);
-        return { success: false, error: error.message };
+        console.error(`Intraday fetch failed for ${symbol}:`, error.message);
     }
+
+    return {
+        success: true,
+        candles,
+        intradayCandles,
+        partial: intradayCandles.length === 0,
+    };
 }
 
 export async function startYahooFeed() {
