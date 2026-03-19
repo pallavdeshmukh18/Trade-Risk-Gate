@@ -4,8 +4,7 @@ import { fetchStockDataOnDemand } from "../services/yahooFeed.js";
 
 const router = express.Router();
 
-// GET /chart/data?symbol=NIFTY&range=1D
-router.get("/data", async (req, res) => {
+async function handleChartRequest(req, res) {
     const { symbol, range = "1D" } = req.query;
 
     if (!symbol) {
@@ -137,6 +136,12 @@ router.get("/data", async (req, res) => {
         console.error("Chart route error:", err);
         res.status(500).json({ error: "Failed to fetch chart data" });
     }
-});
+}
+
+// GET /chart?symbol=NIFTY&range=1D
+router.get("/", handleChartRequest);
+
+// Backward-compatible alias for older callers
+router.get("/data", handleChartRequest);
 
 export default router;

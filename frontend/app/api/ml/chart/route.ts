@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
         }
 
         const search = request.nextUrl.searchParams.toString();
-        const response = await fetch(`${BACKEND_URL}/chart/data?${search}`, {
+        const response = await fetch(`${BACKEND_URL}/chart?${search}`, {
             cache: "no-store",
         });
 
