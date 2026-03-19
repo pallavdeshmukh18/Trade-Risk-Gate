@@ -28,6 +28,15 @@ function toYahooSymbol(symbol) {
     // Clean up the symbol
     const clean = symbol.toUpperCase().trim();
 
+    const INDEX_ALIASES = {
+        NIFTY: "^NSEI",
+        SENSEX: "^BSESN",
+    };
+
+    if (INDEX_ALIASES[clean]) {
+        return INDEX_ALIASES[clean];
+    }
+
     // Already has a suffix or is an index (^NSEI, ^GSPC) or crypto (BTC-USD)
     if (clean.includes('.') || clean.startsWith('^') || clean.includes('-')) {
         return clean;

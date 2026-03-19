@@ -23,6 +23,8 @@ function isBlocked(symbol: string): boolean {
 
 function formatChartSymbol(symbol: string): string {
     const normalized = symbol.trim().toUpperCase();
+    if (normalized === "NIFTY") return "NIFTY";
+    if (normalized === "SENSEX") return "SENSEX";
     return normalized.includes(".") ? normalized : `${normalized}.NS`;
 }
 

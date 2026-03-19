@@ -23,6 +23,36 @@ type SearchResult = {
     exchange?: string;
 };
 
+const LOCAL_SEARCH_RESULTS: SearchResult[] = [
+    { symbol: "RELIANCE", name: "Reliance Industries", exchange: "NSE" },
+    { symbol: "TCS", name: "Tata Consultancy Services", exchange: "NSE" },
+    { symbol: "INFY", name: "Infosys", exchange: "NSE" },
+    { symbol: "HDFCBANK", name: "HDFC Bank", exchange: "NSE" },
+    { symbol: "ICICIBANK", name: "ICICI Bank", exchange: "NSE" },
+    { symbol: "HINDUNILVR", name: "Hindustan Unilever", exchange: "NSE" },
+    { symbol: "ITC", name: "ITC Limited", exchange: "NSE" },
+    { symbol: "SBIN", name: "State Bank of India", exchange: "NSE" },
+    { symbol: "BHARTIARTL", name: "Bharti Airtel", exchange: "NSE" },
+    { symbol: "LT", name: "Larsen & Toubro", exchange: "NSE" },
+    { symbol: "TATAMOTORS", name: "Tata Motors", exchange: "NSE" },
+    { symbol: "AXISBANK", name: "Axis Bank", exchange: "NSE" },
+    { symbol: "MARUTI", name: "Maruti Suzuki", exchange: "NSE" },
+    { symbol: "NIFTY", name: "NIFTY 50", exchange: "INDEX" },
+];
+
+function getLocalSearchResults(query: string, stocks: string[]): SearchResult[] {
+    const normalizedQuery = query.trim().toUpperCase();
+
+    if (!normalizedQuery) return [];
+
+    return LOCAL_SEARCH_RESULTS
+        .filter((result) => {
+            const haystack = `${result.symbol} ${result.name}`.toUpperCase();
+            return haystack.includes(normalizedQuery) && !stocks.includes(result.symbol);
+        })
+        .slice(0, 10);
+}
+
 type StockData = {
     price: number;
     changePercent: number;
@@ -69,18 +99,27 @@ export default function Watchlist({ onSelectSymbol, isFullPage = false }: Watchl
         // Debounce search - wait 300ms after user stops typing
         searchTimeoutRef.current = setTimeout(async () => {
             try {
+                const localResults = getLocalSearchResults(search, stocks);
                 const response = await fetch(`/api/search/stocks?q=${encodeURIComponent(search)}`);
                 const data = await response.json();
 
                 // Filter out stocks already in watchlist
-                const filteredResults = (data.results || []).filter(
+                const remoteResults = (data.results || []).filter(
                     (result: SearchResult) => !stocks.includes(result.symbol)
                 );
 
-                setSearchResults(filteredResults);
+                const mergedResults = [...localResults];
+
+                for (const result of remoteResults) {
+                    if (!mergedResults.some((item) => item.symbol === result.symbol)) {
+                        mergedResults.push(result);
+                    }
+                }
+
+                setSearchResults(mergedResults);
             } catch (error) {
                 console.error("Search error:", error);
-                setSearchResults([]);
+                setSearchResults(getLocalSearchResults(search, stocks));
             } finally {
                 setIsSearching(false);
             }

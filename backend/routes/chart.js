@@ -24,7 +24,9 @@ async function handleChartRequest(req, res) {
 
     try {
         const rawSymbol = String(symbol).trim().toUpperCase();
-        const ticker = rawSymbol.includes(".") ? rawSymbol : `${rawSymbol}.NS`;
+        const ticker = rawSymbol === "NIFTY" || rawSymbol === "SENSEX"
+            ? rawSymbol
+            : (rawSymbol.includes(".") ? rawSymbol : `${rawSymbol}.NS`);
         const isIntraday = range === "1D" || range === "5D";
         const primarySymbol = ticker;
         const fallbackSymbol = rawSymbol !== ticker ? rawSymbol : null;
