@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsInitializing(false);
     }, []);
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    const apiUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
 
     const persistAuthState = (data: { token: string; name?: string | null; email?: string | null; picture?: string | null }) => {
         setToken(data.token);

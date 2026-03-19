@@ -6,7 +6,7 @@ interface FetchOptions extends RequestInit {
 
 export function useFetch() {
     const { token } = useAuth();
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    const apiUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
 
     const fetchWithAuth = async (
         endpoint: string,

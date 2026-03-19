@@ -33,9 +33,12 @@ function normalizeEmail(email) {
     return email.trim().toLowerCase();
 }
 
-function getFrontendCallbackUrl() {
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-    return `${frontendUrl.replace(/\/$/, "")}/auth/callback`;
+function getFrontendUrl() {
+    return (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+}
+
+function getBackendUrl() {
+    return (process.env.BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
 }
 
 router.post("/login", async (req, res) => {
@@ -95,131 +98,30 @@ router.post("/register", async (req, res) => {
     }
 });
 
-router.get("/google", async (req, res) => {
+router.get("/google", (req, res) => {
     if (!process.env.GOOGLE_CLIENT_ID) {
         return res.status(500).send("Google OAuth is not configured");
     }
 
-    const callbackUrl = getFrontendCallbackUrl();
-    const escapedClientId = JSON.stringify(process.env.GOOGLE_CLIENT_ID);
-    const escapedCallbackUrl = JSON.stringify(callbackUrl);
+    const params = new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        redirect_uri: `${getBackendUrl()}/auth/google/callback`,
+        response_type: "code",
+        scope: "profile email",
+    });
 
-    return res.type("html").send(`<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Continue with Google</title>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <style>
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: #0e1018;
-        color: white;
-        font-family: Arial, Helvetica, sans-serif;
-      }
-      .card {
-        width: min(92vw, 420px);
-        padding: 32px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 20px;
-        background: rgba(20, 20, 26, 0.96);
-        text-align: center;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
-      }
-      #google-button {
-        display: inline-flex;
-        justify-content: center;
-        margin-top: 20px;
-      }
-      .muted {
-        color: rgba(255, 255, 255, 0.64);
-        font-size: 14px;
-        line-height: 1.5;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h1>Continue with Google</h1>
-      <p class="muted">Choose your Google account to finish signing in to LowkeyLoss.</p>
-      <div id="google-button"></div>
-      <p class="muted" id="status"></p>
-    </div>
+    const redirectURL = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    return res.redirect(redirectURL);
+});
 
-    <script>
-      const clientId = ${escapedClientId};
-      const callbackUrl = ${escapedCallbackUrl};
-      const statusNode = document.getElementById("status");
+router.get("/google/callback", async (req, res) => {
+    const { code } = req.query;
 
-      const redirectWithError = (message) => {
-        const url = new URL(callbackUrl);
-        url.searchParams.set("error", message);
-        window.location.href = url.toString();
-      };
+    if (!code) {
+        return res.redirect(`${getFrontendUrl()}/login?error=Missing%20Google%20auth%20code`);
+    }
 
-      const redirectWithAuth = (payload) => {
-        const url = new URL(callbackUrl);
-        url.searchParams.set("token", payload.token);
-        if (payload.name) url.searchParams.set("name", payload.name);
-        if (payload.email) url.searchParams.set("email", payload.email);
-        if (payload.picture) url.searchParams.set("picture", payload.picture);
-        window.location.href = url.toString();
-      };
-
-      const initializeGoogle = () => {
-        if (!window.google?.accounts?.id) {
-          statusNode.textContent = "Google sign-in is still loading...";
-          return;
-        }
-
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: async ({ credential }) => {
-            if (!credential) {
-              redirectWithError("Google sign-in failed");
-              return;
-            }
-
-            statusNode.textContent = "Completing Google sign-in...";
-
-            try {
-              const response = await fetch("/auth/google", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ credential }),
-              });
-
-              const data = await response.json();
-
-              if (!response.ok) {
-                throw new Error(data.error || "Google sign-in failed");
-              }
-
-              redirectWithAuth(data);
-            } catch (error) {
-              redirectWithError(error.message || "Google sign-in failed");
-            }
-          },
-        });
-
-        window.google.accounts.id.renderButton(document.getElementById("google-button"), {
-          type: "standard",
-          theme: "outline",
-          size: "large",
-          text: "continue_with",
-          shape: "rectangular",
-          width: 320,
-        });
-      };
-
-      window.addEventListener("load", initializeGoogle);
-    </script>
-  </body>
-</html>`);
+    return res.redirect(`${getFrontendUrl()}/dashboard`);
 });
 
 router.post("/google", async (req, res) => {
