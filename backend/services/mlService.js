@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const ML_BASE_URL = process.env.ML_BASE_URL || "http://127.0.0.1:8001";
+const ML_BASE_URL = process.env.ML_BASE_URL;
 
 async function checkHealth() {
     try {
@@ -9,7 +9,8 @@ async function checkHealth() {
         });
         return res.data;
     } catch (err) {
-        console.error("❌ Axios Error:", err.message);
+        console.error("Error:", err.message);
+        console.error("Response:", err.response?.data);
         throw err;
     }
 }
@@ -29,11 +30,8 @@ async function getRiskAnalysis(portfolioData) {
 
         return res.data;
     } catch (err) {
-        console.error("❌ ML service error:", {
-            message: err.message,
-            status: err.response?.status,
-            data: err.response?.data,
-        });
+        console.error("Error:", err.message);
+        console.error("Response:", err.response?.data);
         throw err;
     }
 }
@@ -53,11 +51,8 @@ async function getTradeImpact(data) {
 
         return res.data;
     } catch (err) {
-        console.error("❌ ML trade-impact error:", {
-            message: err.message,
-            status: err.response?.status,
-            data: err.response?.data,
-        });
+        console.error("Error:", err.message);
+        console.error("Response:", err.response?.data);
         throw err;
     }
 }
@@ -77,9 +72,8 @@ async function predictRisk(data) {
 
         return res.data;
     } catch (err) {
-        console.error("Status:", err.response?.status);
-        console.error("Data:", err.response?.data);
-        console.error("Message:", err.message);
+        console.error("Error:", err.message);
+        console.error("Response:", err.response?.data);
         throw err;
     }
 }

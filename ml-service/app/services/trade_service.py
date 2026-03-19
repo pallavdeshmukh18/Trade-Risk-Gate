@@ -3,7 +3,10 @@ from app.core.trade_simulator import simulate_trade
 
 
 def analyze_trade_impact(positions, trade):
-    safe_positions = positions if isinstance(positions, list) else []
+    safe_positions = [
+        pos for pos in positions
+        if isinstance(pos, dict)
+    ] if isinstance(positions, list) else []
     safe_trade = trade if isinstance(trade, dict) else {}
 
     # Risk BEFORE

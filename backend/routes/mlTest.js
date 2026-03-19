@@ -2,19 +2,18 @@ import express from "express";
 import axios from "axios";
 
 const router = express.Router();
+const ML_BASE_URL = process.env.ML_BASE_URL;
 
 router.get("/ml-health", async (req, res) => {
-    console.log("🔥 route hit");
-
     try {
-        const response = await axios.get("http://127.0.0.1:8000/health", {
+        const response = await axios.get(`${ML_BASE_URL}/health`, {
             timeout: 2000,
         });
 
-        console.log("✅ ML response:", response.data);
         res.json(response.data);
     } catch (err) {
-        console.error("❌ axios failed:", err.message);
+        console.error("Error:", err.message);
+        console.error("Response:", err.response?.data);
         res.status(500).json({ error: err.message });
     }
 });

@@ -1,8 +1,9 @@
 import { dirname, join } from "path";
 import express from "express";
+import cors from "cors";
 import marketRoutes from "./routes/market.js";
 import healthCheckRoute from "./routes/healthcheck.js";
-import mongoose, { get } from "mongoose";
+import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { startYahooFeed } from "./services/yahooFeed.js";
@@ -26,25 +27,30 @@ const __dirname = dirname(__filename);
 
 dotenv.config({ path: join(__dirname, ".env") });
 
+if (!process.env.MONGO_URI) {
+  throw new Error("MONGO_URI missing");
+}
+
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET missing");
+}
+
+if (!process.env.ML_BASE_URL) {
+  throw new Error("ML_BASE_URL missing");
+}
+
 const app = express();
+const PORT = process.env.PORT || 8000;
+const allowedOrigins = ["http://localhost:3000", process.env.FRONTEND_URL].filter(Boolean);
 
 app.use(express.json());
-
-// CORS middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin === "http://localhost:3000" || origin === "http://127.0.0.1:3000") {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Allow-Credentials", "true");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
+app.options("*", cors());
 
 app.use("/api", predictRoutes);
 app.use("/api", tradeImpactRoutes);
@@ -65,6 +71,9 @@ app.use("/portfolio", portfolioRoutes); // Note: portfolioRoutes mounts confirm 
 app.use("/stats", pnlRoutes);
 app.use("/watchlist", watchlistRoutes);
 
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
 
 mongoose
   .connect(process.env.MONGO_URI, {
@@ -75,13 +84,19 @@ mongoose
     await startYahooFeed();
     console.log("Yahoo market feed started");
   })
-  .catch((err) => console.error("Mongo Error:", err));
+  .catch((err) => {
+    console.error("Error:", err.message);
+    console.error("Response:", err.response?.data);
+  });
 
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => {
-  console.log(`http://localhost:${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`Server running on ${PORT}`);
+});
+
+server.on("error", (err) => {
+  console.error("Error:", err.message);
 });

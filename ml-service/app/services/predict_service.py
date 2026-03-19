@@ -3,12 +3,27 @@ from app.core.model import predict
 from app.core.data_builder import calculate_returns
 
 
+def _safe_numeric_prices(prices):
+    if not isinstance(prices, list):
+        return []
+
+    valid_prices = []
+    for price in prices:
+        if isinstance(price, (int, float)) and not isinstance(price, bool):
+            valid_prices.append(float(price))
+
+    return valid_prices
+
+
 def predict_portfolio_risk(positions):
     all_returns = []
     prices_combined = []
 
     for pos in positions:
-        prices = pos.get("prices", [])
+        if not isinstance(pos, dict):
+            continue
+
+        prices = _safe_numeric_prices(pos.get("prices", []))
         if len(prices) < 2:
             continue
 
@@ -24,6 +39,9 @@ def predict_portfolio_risk(positions):
     momentum = prices_combined[-1] - prices_combined[0]
 
     prob = predict([volatility, mean_return, momentum])
+
+    if prob is None:
+        return {"error": "Model not loaded"}
 
     return {
         "lossProbability": round(prob, 2),

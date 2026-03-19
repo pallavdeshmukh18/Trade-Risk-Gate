@@ -14,10 +14,21 @@ def train_model(X, y):
 
 
 def load_model():
-    return joblib.load(MODEL_PATH)
+    if not MODEL_PATH.exists():
+        print("Error:", f"Model file not found at {MODEL_PATH}")
+        return None
+
+    try:
+        return joblib.load(MODEL_PATH)
+    except Exception as exc:
+        print("Error:", str(exc))
+        return None
 
 
 def predict(features):
     model = load_model()
+    if model is None:
+        return None
+
     prob = model.predict_proba([features])[0][1]
     return prob
