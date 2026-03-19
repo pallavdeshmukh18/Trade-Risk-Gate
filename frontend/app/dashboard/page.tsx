@@ -106,7 +106,7 @@ export default function DashboardPage() {
         setError(null);
 
         try {
-            const [state, positionsRes, pnlRes, tradesRes, marketRes] = await Promise.all([
+            const results = await Promise.allSettled([
                 fetchWithAuth("/portfolio/state"),
                 fetchWithAuth("/portfolio/positions"),
                 fetchWithAuth("/stats/pnl/summary"),
@@ -114,11 +114,32 @@ export default function DashboardPage() {
                 fetchWithAuth("/market/live?symbol=NIFTY"),
             ]);
 
-            setPortfolioState(state);
-            setPositions(positionsRes || []);
-            setPnlSummary(pnlRes || null);
-            setTrades(tradesRes?.trades || []);
-            setMarket(marketRes?.data || null);
+            const [stateRes, positionsRes, pnlRes, tradesRes, marketRes] = results;
+
+            if (stateRes.status === "fulfilled") {
+                setPortfolioState(stateRes.value);
+            } else {
+                setPortfolioState({
+                    balance: 100000,
+                    marginUsed: 0,
+                    unrealizedPnL: 0,
+                    equity: 100000,
+                });
+            }
+
+            setPositions(positionsRes.status === "fulfilled" ? positionsRes.value || [] : []);
+            setPnlSummary(pnlRes.status === "fulfilled" ? pnlRes.value || null : {
+                totalRealizedPnL: 0,
+                totalTrades: 0,
+                winRate: 0,
+            });
+            setTrades(tradesRes.status === "fulfilled" ? tradesRes.value?.trades || [] : []);
+            setMarket(marketRes.status === "fulfilled" ? marketRes.value?.data || null : null);
+
+            const failedResults = results.filter((result) => result.status === "rejected");
+            if (failedResults.length > 0) {
+                setError("Some dashboard data could not be loaded.");
+            }
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to load dashboard";
             setError(message);

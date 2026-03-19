@@ -1,9 +1,9 @@
-import redis from "./redisClient.js";
+import { safeRedisGet } from "./redisClient.js";
 
 export async function fetchMarketData(symbol = "NIFTY") {
-  const price = await redis.get(`live_price:${symbol}`);
-  const vol = await redis.get(`volatility:${symbol}`);
-  const ohlcv = await redis.get(`ohlcv:${symbol}`);
+  const price = await safeRedisGet(`live_price:${symbol}`);
+  const vol = await safeRedisGet(`volatility:${symbol}`);
+  const ohlcv = await safeRedisGet(`ohlcv:${symbol}`);
 
   return {
     symbol,

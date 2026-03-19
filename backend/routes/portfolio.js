@@ -3,7 +3,7 @@ import { getPortfolioState, syncPortfolioWithMarket } from "../services/portfoli
 import Position from "../schemas/position_schema.js";
 import { recalcPortfolio } from "../services/portfolioEngine.js";
 import authMiddleware from "../middleware/authMiddleware.js";
-import redis from "../services/redisClient.js";
+import { safeRedisGet, safeRedisSet } from "../services/redisClient.js";
 
 
 
@@ -32,7 +32,7 @@ router.get("/positions", async (req, res) => {
             return res.status(401).json({ error: "Unauthorized - no user ID" });
         }
         // 1. Try Cache
-        const cachedPositions = await redis.get(`positions:${userId}`);
+        const cachedPositions = await safeRedisGet(`positions:${userId}`);
         if (cachedPositions) {
             return res.json(JSON.parse(cachedPositions));
         }
@@ -41,7 +41,7 @@ router.get("/positions", async (req, res) => {
         const positions = await Position.find({ userId });
 
         // 3. Set Cache (e.g. 5 min expiry)
-        await redis.set(`positions:${userId}`, JSON.stringify(positions), "EX", 300);
+        await safeRedisSet(`positions:${userId}`, JSON.stringify(positions), "EX", 300);
 
         res.json(positions);
     } catch (err) {

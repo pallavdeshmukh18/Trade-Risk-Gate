@@ -1,6 +1,6 @@
 import Portfolio from "../schemas/portfolio_schema.js";
 import Position from "../schemas/position_schema.js";
-import redis from "../services/redisClient.js";
+import { safeRedisGet, safeRedisSet } from "../services/redisClient.js";
 
 
 /**
@@ -98,7 +98,7 @@ export async function syncPortfolioWithMarket(userId) {
 
     for (let pos of positions) {
         const redisKey = `live_price:${pos.symbol}`;
-        const priceStr = await redis.get(redisKey);
+        const priceStr = await safeRedisGet(redisKey);
 
         if (priceStr) {
             pos.currentPrice = Number(priceStr);
@@ -118,7 +118,7 @@ export async function syncPortfolioWithMarket(userId) {
 
     // Cache updated positions to Redis
     const allPositions = await Position.find({ userId });
-    await redis.set(`positions:${userId}`, JSON.stringify(allPositions));
+    await safeRedisSet(`positions:${userId}`, JSON.stringify(allPositions));
 
     return {
         equity: portfolio.equity,

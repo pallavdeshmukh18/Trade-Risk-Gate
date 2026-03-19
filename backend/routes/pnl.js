@@ -1,7 +1,7 @@
 
 import express from "express";
 import Trade from "../schemas/trade_schema.js";
-import redis from "../services/redisClient.js";
+import { safeRedisGet, safeRedisSet } from "../services/redisClient.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -17,7 +17,7 @@ router.get("/pnl/trades", async (req, res) => {
 
     try {
         // 1. Try Cache
-        const cachedTrades = await redis.get(`trades:${userId}`);
+        const cachedTrades = await safeRedisGet(`trades:${userId}`);
         if (cachedTrades) {
             return res.json({
                 source: "cache",
@@ -29,7 +29,7 @@ router.get("/pnl/trades", async (req, res) => {
         const trades = await Trade.find({ userId }).sort({ createdAt: -1 }).limit(100);
 
         // 3. Set Cache
-        await redis.set(`trades:${userId}`, JSON.stringify(trades), "EX", 300); // 5 min expiry optional
+        await safeRedisSet(`trades:${userId}`, JSON.stringify(trades), "EX", 300); // 5 min expiry optional
 
         res.json({
             source: "db",
